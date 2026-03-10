@@ -923,7 +923,7 @@
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="project">Project</label>
-                        <input type="text" id="project" required placeholder="Enter project name">
+                        <div id="projectContainer"></div>
                         <div class="error-message" id="projectError"></div>
                     </div>
                     <div class="form-group">
@@ -941,23 +941,11 @@
                     </div>
                     <div class="form-group">
                         <label for="typology">Typology</label>
-                        <input type="text" id="typology" required placeholder="Enter typology">
+                        <div id="typologyContainer"></div>
                     </div>
                     <div class="form-group">
                         <label for="line">Line</label>
-                        <select id="line" required>
-                            <option value="">Select Line</option>
-                            <option value="1">Line 1</option>
-                            <option value="2">Line 2</option>
-                            <option value="3">Line 3</option>
-                            <option value="4">Line 4</option>
-                            <option value="5">Line 5</option>
-                            <option value="6">Line 6</option>
-                            <option value="7">Line 7</option>
-                            <option value="8">Line 8</option>
-                            <option value="9">Line 9</option>
-                            <option value="10">Line 10</option>
-                        </select>
+                        <div id="lineContainer"></div>
                     </div>
                     <div class="form-group">
                         <label for="plan">Plan</label>
@@ -969,11 +957,11 @@
                     </div>
                     <div class="form-group">
                         <label for="shiftStart">Shift Start Time</label>
-                        <input type="time" id="shiftStart" required>
+                        <div id="shiftStartContainer"></div>
                     </div>
                     <div class="form-group">
                         <label for="shiftEnd">Shift End Time</label>
-                        <input type="time" id="shiftEnd" required>
+                        <div id="shiftEndContainer"></div>
                     </div>
                     <div class="form-group">
                         <label for="totalManpower">Total Manpower</label>
@@ -986,11 +974,11 @@
                     </div>
                     <div class="form-group">
                         <label for="lunchStart">Lunch Start Time</label>
-                        <input type="time" id="lunchStart" required>
+                        <div id="lunchStartContainer"></div>
                     </div>
                     <div class="form-group">
                         <label for="lunchEnd">Lunch End Time</label>
-                        <input type="time" id="lunchEnd" required>
+                        <div id="lunchEndContainer"></div>
                     </div>
                 </div>
                 <button type="submit" class="btn-start">Start New Session</button>
@@ -1308,6 +1296,9 @@
             <button class="dashboard-tab" onclick="switchAdminTab('records')" id="adminTabRecords">
                 Daily Records
             </button>
+            <button class="dashboard-tab" onclick="switchAdminTab('settings')" id="adminTabSettings">
+                Settings
+            </button>
         </div>
 
         <!-- Dashboard Tab Content -->
@@ -1405,6 +1396,101 @@
 
                 <!-- Records Table -->
                 <div id="dailyRecordsTable"></div>
+            </div>
+
+        </div>
+
+        <!-- Settings Tab Content -->
+        <div id="adminSettingsContent" style="display: none; max-width: 1400px; margin: 0 auto; padding: 20px;">
+            
+            <div style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <h2 style="margin: 0 0 24px 0; color: #333;">⚙️ Dropdown Settings</h2>
+                <p style="color: #666; margin-bottom: 24px;">Manage dropdown options for the monitoring setup form. These will be available to all operators.</p>
+
+                <!-- Line Numbers -->
+                <div style="margin-bottom: 32px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">🔢 Line Numbers</h3>
+                    <div id="linesListContainer" style="margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="newLine" placeholder="Enter line number (e.g., 1, 2, Line A)" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button onclick="addSettingOption('lines')" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            ➕ Add Line
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Projects -->
+                <div style="margin-bottom: 32px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">🏗️ Projects</h3>
+                    <div id="projectsListContainer" style="margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="newProject" placeholder="Enter project name" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button onclick="addSettingOption('projects')" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            ➕ Add Project
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Typologies -->
+                <div style="margin-bottom: 32px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">📐 Typologies</h3>
+                    <div id="typologiesListContainer" style="margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="newTypology" placeholder="Enter typology name" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button onclick="addSettingOption('typologies')" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            ➕ Add Typology
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Shift Start Times -->
+                <div style="margin-bottom: 32px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">🕐 Shift Start Times</h3>
+                    <div id="shiftStartTimesListContainer" style="margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="time" id="newShiftStartTime" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button onclick="addSettingOption('shift_start_times')" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            ➕ Add Time
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Shift End Times -->
+                <div style="margin-bottom: 32px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">🕔 Shift End Times</h3>
+                    <div id="shiftEndTimesListContainer" style="margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="time" id="newShiftEndTime" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button onclick="addSettingOption('shift_end_times')" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            ➕ Add Time
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lunch Start Times -->
+                <div style="margin-bottom: 32px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">🍴 Lunch Start Times</h3>
+                    <div id="lunchStartTimesListContainer" style="margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="time" id="newLunchStartTime" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button onclick="addSettingOption('lunch_start_times')" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            ➕ Add Time
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lunch End Times -->
+                <div style="margin-bottom: 32px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">🍴 Lunch End Times</h3>
+                    <div id="lunchEndTimesListContainer" style="margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="time" id="newLunchEndTime" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button onclick="addSettingOption('lunch_end_times')" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            ➕ Add Time
+                        </button>
+                    </div>
+                </div>
+
             </div>
 
         </div>
@@ -2038,13 +2124,184 @@
                 document.getElementById('adminTabDashboard').classList.add('active');
                 document.getElementById('adminDashboardContent').style.display = 'block';
                 document.getElementById('adminRecordsContent').style.display = 'none';
+                document.getElementById('adminSettingsContent').style.display = 'none';
             } else if (tab === 'records') {
                 document.getElementById('adminTabRecords').classList.add('active');
                 document.getElementById('adminDashboardContent').style.display = 'none';
                 document.getElementById('adminRecordsContent').style.display = 'block';
+                document.getElementById('adminSettingsContent').style.display = 'none';
                 loadDailyRecords();
+            } else if (tab === 'settings') {
+                document.getElementById('adminTabSettings').classList.add('active');
+                document.getElementById('adminDashboardContent').style.display = 'none';
+                document.getElementById('adminRecordsContent').style.display = 'none';
+                document.getElementById('adminSettingsContent').style.display = 'block';
+                loadAllSettings();
             }
         }
+
+        // ── Settings Management ─────────────────
+        const settingsConfig = {
+            lines: { container: 'linesListContainer', input: 'newLine', label: 'Line' },
+            projects: { container: 'projectsListContainer', input: 'newProject', label: 'Project' },
+            typologies: { container: 'typologiesListContainer', input: 'newTypology', label: 'Typology' },
+            shift_start_times: { container: 'shiftStartTimesListContainer', input: 'newShiftStartTime', label: 'Time' },
+            shift_end_times: { container: 'shiftEndTimesListContainer', input: 'newShiftEndTime', label: 'Time' },
+            lunch_start_times: { container: 'lunchStartTimesListContainer', input: 'newLunchStartTime', label: 'Time' },
+            lunch_end_times: { container: 'lunchEndTimesListContainer', input: 'newLunchEndTime', label: 'Time' }
+        };
+
+        function loadAllSettings() {
+            Object.keys(settingsConfig).forEach(key => {
+                loadSettingOptions(key);
+            });
+        }
+
+        function loadSettingOptions(settingKey) {
+            const config = settingsConfig[settingKey];
+            const container = document.getElementById(config.container);
+            
+            db.ref(`settings/${settingKey}`).on('value', (snapshot) => {
+                const options = snapshot.val() || [];
+                
+                if (options.length === 0) {
+                    container.innerHTML = '<p style="color: #888; font-size: 14px; margin: 0;">No options added yet. Add your first option below.</p>';
+                } else {
+                    container.innerHTML = options.map((option, index) => `
+                        <div style="display: inline-flex; align-items: center; background: white; padding: 8px 12px; border-radius: 6px; margin: 4px; border: 1px solid #ddd;">
+                            <span style="margin-right: 8px;">${option}</span>
+                            <button onclick="deleteSettingOption('${settingKey}', ${index})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                ✕
+                            </button>
+                        </div>
+                    `).join('');
+                }
+            });
+        }
+
+        function addSettingOption(settingKey) {
+            const config = settingsConfig[settingKey];
+            const input = document.getElementById(config.input);
+            const value = input.value.trim();
+            
+            if (!value) {
+                alert('Please enter a value');
+                return;
+            }
+
+            db.ref(`settings/${settingKey}`).once('value').then((snapshot) => {
+                const options = snapshot.val() || [];
+                
+                // Check for duplicates
+                if (options.includes(value)) {
+                    alert('This option already exists');
+                    return;
+                }
+                
+                options.push(value);
+                return db.ref(`settings/${settingKey}`).set(options);
+            }).then(() => {
+                input.value = '';
+                alert(`✅ ${config.label} added successfully!`);
+                // Reload setup form dropdowns
+                loadSetupFormDropdowns();
+            }).catch(e => {
+                alert('❌ Error: ' + e.message);
+            });
+        }
+
+        function deleteSettingOption(settingKey, index) {
+            if (!confirm('Delete this option?')) return;
+            
+            db.ref(`settings/${settingKey}`).once('value').then((snapshot) => {
+                const options = snapshot.val() || [];
+                options.splice(index, 1);
+                return db.ref(`settings/${settingKey}`).set(options);
+            }).then(() => {
+                alert('✅ Option deleted');
+                // Reload setup form dropdowns
+                loadSetupFormDropdowns();
+            }).catch(e => {
+                alert('❌ Error: ' + e.message);
+            });
+        }
+
+        // ── Setup Form Dynamic Dropdowns ─────────────────
+        function loadSetupFormDropdowns() {
+            // Load each dropdown with fallback to text input
+            loadDynamicField('lines', 'lineContainer', 'line', 'select');
+            loadDynamicField('projects', 'projectContainer', 'project', 'text');
+            loadDynamicField('typologies', 'typologyContainer', 'typology', 'text');
+            loadDynamicField('shift_start_times', 'shiftStartContainer', 'shiftStart', 'time');
+            loadDynamicField('shift_end_times', 'shiftEndContainer', 'shiftEnd', 'time');
+            loadDynamicField('lunch_start_times', 'lunchStartContainer', 'lunchStart', 'time');
+            loadDynamicField('lunch_end_times', 'lunchEndContainer', 'lunchEnd', 'time');
+        }
+
+        function loadDynamicField(settingKey, containerId, fieldId, fallbackType) {
+            const container = document.getElementById(containerId);
+            
+            db.ref(`settings/${settingKey}`).once('value').then((snapshot) => {
+                const options = snapshot.val() || [];
+                
+                if (options.length > 0) {
+                    // Create dropdown
+                    const select = document.createElement('select');
+                    select.id = fieldId;
+                    select.required = true;
+                    select.style.cssText = 'width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;';
+                    
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = `Select ${fieldId}`;
+                    select.appendChild(defaultOption);
+                    
+                    // Add "Or type manually" option
+                    const manualOption = document.createElement('option');
+                    manualOption.value = '__MANUAL__';
+                    manualOption.textContent = '✏️ Type manually...';
+                    select.appendChild(manualOption);
+                    
+                    options.forEach(option => {
+                        const opt = document.createElement('option');
+                        opt.value = option;
+                        opt.textContent = option;
+                        select.appendChild(opt);
+                    });
+                    
+                    // Handle manual entry
+                    select.addEventListener('change', function() {
+                        if (this.value === '__MANUAL__') {
+                            showManualInput(containerId, fieldId, fallbackType);
+                        }
+                    });
+                    
+                    container.innerHTML = '';
+                    container.appendChild(select);
+                } else {
+                    // No options - show text input fallback
+                    showManualInput(containerId, fieldId, fallbackType);
+                }
+            });
+        }
+
+        function showManualInput(containerId, fieldId, inputType) {
+            const container = document.getElementById(containerId);
+            const input = document.createElement('input');
+            input.type = inputType;
+            input.id = fieldId;
+            input.required = true;
+            input.placeholder = `Enter ${fieldId}`;
+            input.style.cssText = 'width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;';
+            
+            container.innerHTML = '';
+            container.appendChild(input);
+        }
+
+        // Load dropdowns when setup screen is shown
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSetupFormDropdowns();
+        });
 
         // ── Daily Records Management ─────────────────
         let currentEditingRecord = null;
@@ -3529,8 +3786,8 @@
             // Initial update
             updateTimers();
             
-            // Auto-save every 30 seconds
-            setInterval(saveSession, 30000);
+            // Auto-save every 10 seconds
+            setInterval(saveSession, 10000);
             
             // Check for shift end every 60 seconds
             shiftEndCheckInterval = setInterval(checkShiftEnd, 60000);
