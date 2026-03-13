@@ -1649,6 +1649,17 @@
         </div>
     </div>
 
+    <!-- Downtime Details Modal -->
+    <div class="pin-modal" id="downtimeDetailsModal">
+        <div class="pin-modal-content" style="max-width: 700px;">
+            <h2>📋 Downtime Event Details</h2>
+            <div id="downtimeDetailsContent" style="margin: 20px 0; max-height: 400px; overflow-y: auto;"></div>
+            <div class="modal-buttons">
+                <button class="btn-modal-cancel" onclick="closeDowntimeDetailsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Downtime Modal -->
     <div class="modal" id="downtimeModal">
         <div class="modal-content">
@@ -2368,6 +2379,7 @@
                     const efficiency = record.efficiency || 0;
                     const effColor = efficiency >= 90 ? '#4caf50' : efficiency >= 70 ? '#ff9800' : '#f44336';
                     const downtime = record.downtimeMinutes ? `${Math.floor(record.downtimeMinutes / 60)}h ${record.downtimeMinutes % 60}m` : '0m';
+                    const hasDowntimeEvents = record.downtimeEvents && record.downtimeEvents.length > 0;
 
                     tableHTML += `
                         <tr style="border-bottom: 1px solid #e0e0e0;">
@@ -2379,7 +2391,10 @@
                             <td style="padding: 12px; text-align: center; font-weight: 500;">${record.actual}</td>
                             <td style="padding: 12px; text-align: center; font-weight: bold; color: ${effColor};">${efficiency}%</td>
                             <td style="padding: 12px; text-align: center;">${record.manpower || 0}</td>
-                            <td style="padding: 12px; text-align: center;">${downtime}</td>
+                            <td style="padding: 12px; text-align: center;">
+                                ${downtime}
+                                ${hasDowntimeEvents ? `<br><button onclick='viewDowntimeDetails(${JSON.stringify(record.downtimeEvents).replace(/'/g, "&apos;")})' style="margin-top: 4px; padding: 4px 8px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">📋 Details</button>` : ''}
+                            </td>
                             <td style="padding: 12px; text-align: center;">
                                 <button onclick='editRecord(${JSON.stringify(record).replace(/'/g, "&apos;")})' style="padding: 6px 12px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 4px; font-size: 12px;">
                                     ✏️ Edit
@@ -2529,6 +2544,63 @@
         function closeBulkDeleteModal() {
             document.getElementById('bulkDeleteModal').classList.remove('active');
             document.getElementById('bulkDeleteDate').value = '';
+        }
+
+        function viewDowntimeDetails(downtimeEvents) {
+            const container = document.getElementById('downtimeDetailsContent');
+            
+            if (!downtimeEvents || downtimeEvents.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #888; padding: 20px;">No downtime events recorded.</p>';
+            } else {
+                let html = '<table style="width: 100%; border-collapse: collapse;">';
+                html += `
+                    <thead>
+                        <tr style="background: #f5f7fa; border-bottom: 2px solid #e0e0e0;">
+                            <th style="padding: 12px; text-align: left;">#</th>
+                            <th style="padding: 12px; text-align: left;">Reason</th>
+                            <th style="padding: 12px; text-align: left;">Start Time</th>
+                            <th style="padding: 12px; text-align: left;">End Time</th>
+                            <th style="padding: 12px; text-align: center;">Duration</th>
+                            <th style="padding: 12px; text-align: left;">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                `;
+                
+                downtimeEvents.forEach((event, index) => {
+                    html += `
+                        <tr style="border-bottom: 1px solid #e0e0e0;">
+                            <td style="padding: 12px;">${index + 1}</td>
+                            <td style="padding: 12px; font-weight: 500;">${event.reason}</td>
+                            <td style="padding: 12px;">${event.startTime}</td>
+                            <td style="padding: 12px;">${event.endTime}</td>
+                            <td style="padding: 12px; text-align: center; color: #f44336; font-weight: bold;">${event.durationMinutes} min</td>
+                            <td style="padding: 12px; color: #666;">${event.notes || '-'}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                
+                // Add summary
+                const totalMinutes = downtimeEvents.reduce((sum, event) => sum + event.durationMinutes, 0);
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+                
+                html += `
+                    <div style="margin-top: 20px; padding: 16px; background: #fff3e0; border-left: 4px solid #ff9800; border-radius: 4px;">
+                        <strong>Total Downtime:</strong> ${hours}h ${minutes}m (${downtimeEvents.length} events)
+                    </div>
+                `;
+                
+                container.innerHTML = html;
+            }
+            
+            document.getElementById('downtimeDetailsModal').classList.add('active');
+        }
+
+        function closeDowntimeDetailsModal() {
+            document.getElementById('downtimeDetailsModal').classList.remove('active');
         }
 
         function executeBulkDelete() {
@@ -2911,33 +2983,38 @@
             
             const prodCtx = document.getElementById('historyProductionChart').getContext('2d');
             historyCharts.production = new Chart(prodCtx, {
-                type: 'bar',
+                type: 'line',
                 data: {
                     labels: labels,
                     datasets: [
                         {
                             label: 'Target',
                             data: data.map(d => d.plan),
-                            backgroundColor: 'rgba(200, 200, 200, 0.5)',
                             borderColor: 'rgba(150, 150, 150, 1)',
-                            borderWidth: 1
+                            backgroundColor: 'rgba(200, 200, 200, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 5,
+                            pointBackgroundColor: 'rgba(150, 150, 150, 1)'
                         },
                         {
                             label: 'Actual',
                             data: data.map(d => d.actual),
-                            backgroundColor: data.map(d => {
+                            borderColor: 'rgba(102, 126, 234, 1)',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 6,
+                            pointBackgroundColor: data.map(d => {
                                 const eff = d.plan > 0 ? (d.actual / d.plan) * 100 : 0;
-                                return eff >= 90 ? 'rgba(76, 175, 80, 0.6)' : 
-                                       eff >= 70 ? 'rgba(255, 152, 0, 0.6)' : 
-                                       'rgba(244, 67, 54, 0.6)';
+                                return eff >= 90 ? '#4caf50' : 
+                                       eff >= 70 ? '#ff9800' : 
+                                       '#f44336';
                             }),
-                            borderColor: data.map(d => {
-                                const eff = d.plan > 0 ? (d.actual / d.plan) * 100 : 0;
-                                return eff >= 90 ? 'rgba(76, 175, 80, 1)' : 
-                                       eff >= 70 ? 'rgba(255, 152, 0, 1)' : 
-                                       'rgba(244, 67, 54, 1)';
-                            }),
-                            borderWidth: 2
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
                         }
                     ]
                 },
@@ -2960,8 +3037,9 @@
                             position: 'top'
                         },
                         datalabels: {
+                            display: true,
                             anchor: 'end',
-                            align: 'end',
+                            align: 'top',
                             color: '#333',
                             font: {
                                 weight: 'bold',
@@ -3013,6 +3091,7 @@
                             display: false
                         },
                         datalabels: {
+                            display: true,
                             anchor: 'end',
                             align: 'top',
                             color: '#667eea',
@@ -3035,15 +3114,21 @@
             
             const downtimeCtx = document.getElementById('historyDowntimeChart').getContext('2d');
             historyCharts.downtime = new Chart(downtimeCtx, {
-                type: 'bar',
+                type: 'line',
                 data: {
                     labels: labels,
                     datasets: [{
                         label: 'Downtime Hours',
                         data: data.map(d => (d.downtimeMinutes / 60).toFixed(1)),
-                        backgroundColor: 'rgba(244, 67, 54, 0.6)',
                         borderColor: 'rgba(244, 67, 54, 1)',
-                        borderWidth: 2
+                        backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 6,
+                        pointBackgroundColor: 'rgba(244, 67, 54, 1)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
                     }]
                 },
                 options: {
@@ -3064,8 +3149,9 @@
                             display: false
                         },
                         datalabels: {
+                            display: true,
                             anchor: 'end',
-                            align: 'end',
+                            align: 'top',
                             color: '#f44336',
                             font: {
                                 weight: 'bold',
@@ -3630,6 +3716,19 @@
             const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
             const reportKey = `line${sessionData.line}_${sessionData.boq.toLowerCase()}`;
             
+            // Format downtime events for saving
+            const formattedDowntimeEvents = downtimeEvents.map(event => {
+                const startTime = new Date(event.start);
+                const endTime = new Date(event.end);
+                return {
+                    reason: event.reason,
+                    notes: event.notes || '',
+                    startTime: startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                    endTime: endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+                    durationMinutes: Math.floor(event.duration / 60)
+                };
+            });
+            
             const dailyReport = {
                 date: today,
                 line: sessionData.line,
@@ -3642,6 +3741,7 @@
                 efficiency: sessionData.plan > 0 ? Math.round((actualCount / sessionData.plan) * 100) : 0,
                 manpower: sessionData.present,
                 downtimeMinutes: Math.floor(totalDowntimeSeconds / 60),
+                downtimeEvents: formattedDowntimeEvents,
                 shiftStart: sessionData.shiftStart,
                 shiftEnd: sessionData.shiftEnd,
                 sessionId: currentSessionId,
@@ -3658,10 +3758,14 @@
                     dailyReport.efficiency = dailyReport.plan > 0 ? Math.round((dailyReport.actual / dailyReport.plan) * 100) : 0;
                     dailyReport.downtimeMinutes = existing.downtimeMinutes + dailyReport.downtimeMinutes;
                     dailyReport.manpower = Math.round((existing.manpower + dailyReport.manpower) / 2);
+                    
+                    // Merge downtime events
+                    const existingEvents = existing.downtimeEvents || [];
+                    dailyReport.downtimeEvents = [...existingEvents, ...formattedDowntimeEvents];
                 }
                 
                 db.ref(`daily_reports/${today}/${reportKey}`).set(dailyReport).then(() => {
-                    console.log('Daily report saved');
+                    console.log('Daily report saved with downtime events');
                 }).catch(e => {
                     console.error('Error saving daily report:', e);
                 });
