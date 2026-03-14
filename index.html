@@ -919,6 +919,19 @@
                 📁 Saved session found! You can resume your previous session.
             </div>
             
+            <!-- Use Previous Session Button -->
+            <div id="previousSessionContainer" style="display: none; margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div>
+                        <h3 style="margin: 0; color: white; font-size: 18px;">🔄 Previous Session Available</h3>
+                        <p id="previousSessionInfo" style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;"></p>
+                    </div>
+                    <button type="button" onclick="usePreviousSessionData()" style="padding: 12px 24px; background: white; color: #667eea; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                        ✨ Use This Data
+                    </button>
+                </div>
+            </div>
+            
             <form id="setupForm">
                 <div class="form-grid">
                     <div class="form-group">
@@ -979,6 +992,14 @@
                     <div class="form-group">
                         <label for="lunchEnd">Lunch End Time</label>
                         <div id="lunchEndContainer"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="teaStart">Tea Break Start Time</label>
+                        <div id="teaStartContainer"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="teaEnd">Tea Break End Time</label>
+                        <div id="teaEndContainer"></div>
                     </div>
                 </div>
                 <button type="submit" class="btn-start">Start New Session</button>
@@ -1491,6 +1512,30 @@
                     </div>
                 </div>
 
+                <!-- Tea Break Start Times -->
+                <div style="margin-bottom: 32px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">☕ Tea Break Start Times</h3>
+                    <div id="teaStartTimesListContainer" style="margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="time" id="newTeaStartTime" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button onclick="addSettingOption('tea_start_times')" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            ➕ Add Time
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tea Break End Times -->
+                <div style="margin-bottom: 32px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">☕ Tea Break End Times</h3>
+                    <div id="teaEndTimesListContainer" style="margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="time" id="newTeaEndTime" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button onclick="addSettingOption('tea_end_times')" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            ➕ Add Time
+                        </button>
+                    </div>
+                </div>
+
             </div>
 
         </div>
@@ -1926,16 +1971,63 @@
                     return;
                 }
 
-                container.innerHTML = '';
+                const now = Date.now();
+                const oneDayAgo = now - (24 * 60 * 60 * 1000); // 24 hours
+                const activeViewers = [];
+                
                 Object.entries(viewers).forEach(([viewerId, viewer]) => {
-                    const timeDiff = Math.floor((Date.now() - viewer.lastSeen) / 1000);
-                    const timeAgo = timeDiff < 60 ? 'Just now' : `${Math.floor(timeDiff / 60)}m ago`;
-                    const viewing = viewer.currentSession ? `Viewing ${viewer.currentSession}` : 'Session list';
+                    // Skip if viewer data is invalid or older than 24 hours
+                    if (!viewer || !viewer.lastSeen || !viewer.name) {
+                        db.ref(`viewers/active/${viewerId}`).remove();
+                        return;
+                    }
+                    
+                    const lastSeen = viewer.lastSeen || viewer.joinedAt || 0;
+                    
+                    // Remove old viewers (>24 hours)
+                    if (lastSeen < oneDayAgo) {
+                        db.ref(`viewers/active/${viewerId}`).remove();
+                        return;
+                    }
+                    
+                    // Calculate time ago properly
+                    const timeDiff = Math.floor((now - lastSeen) / 1000);
+                    let timeAgo;
+                    if (isNaN(timeDiff) || timeDiff < 0) {
+                        timeAgo = 'Just now';
+                    } else if (timeDiff < 60) {
+                        timeAgo = 'Just now';
+                    } else if (timeDiff < 3600) {
+                        timeAgo = `${Math.floor(timeDiff / 60)}m ago`;
+                    } else {
+                        timeAgo = `${Math.floor(timeDiff / 3600)}h ago`;
+                    }
+                    
+                    const viewing = viewer.currentSession ? `Viewing ${viewer.currentSession.substring(0, 15)}...` : 'Session list';
+                    
+                    activeViewers.push({
+                        name: viewer.name,
+                        browser: viewer.browser || 'Unknown',
+                        viewing: viewing,
+                        timeAgo: timeAgo,
+                        lastSeen: lastSeen
+                    });
+                });
 
+                if (activeViewers.length === 0) {
+                    container.innerHTML = '<p style="color: #888; text-align: center;">No active viewers</p>';
+                    return;
+                }
+
+                // Sort by most recent first
+                activeViewers.sort((a, b) => b.lastSeen - a.lastSeen);
+
+                container.innerHTML = '';
+                activeViewers.forEach(viewer => {
                     const viewerDiv = document.createElement('div');
                     viewerDiv.style.cssText = 'padding: 12px; background: #f8f9fa; border-radius: 6px; margin-bottom: 8px;';
                     viewerDiv.innerHTML = `
-                        <strong>${viewer.name}</strong> • ${viewer.browser} • ${viewing} • ${timeAgo}
+                        <strong>${viewer.name}</strong> • ${viewer.browser} • ${viewer.viewing} • ${viewer.timeAgo}
                     `;
                     container.appendChild(viewerDiv);
                 });
@@ -2109,11 +2201,14 @@
         }
 
         function clearOldSessions() {
-            if (!confirm('Delete all completed sessions?')) return;
+            if (!confirm('Delete all completed sessions?\n\n⚠️ This only clears temporary session data.\nYour Daily Reports (historical data) will NOT be affected.')) return;
             
             db.ref('sessions').once('value', (snapshot) => {
                 const sessions = snapshot.val();
-                if (!sessions) return;
+                if (!sessions) {
+                    alert('No completed sessions to delete');
+                    return;
+                }
                 
                 let count = 0;
                 Object.entries(sessions).forEach(([sessionId, data]) => {
@@ -2123,7 +2218,7 @@
                     }
                 });
                 
-                alert(`✅ Deleted ${count} completed sessions`);
+                alert(`✅ Deleted ${count} completed sessions\n\n📊 Your Daily Reports are safe and untouched.`);
             });
         }
 
@@ -2159,7 +2254,9 @@
             shift_start_times: { container: 'shiftStartTimesListContainer', input: 'newShiftStartTime', label: 'Time' },
             shift_end_times: { container: 'shiftEndTimesListContainer', input: 'newShiftEndTime', label: 'Time' },
             lunch_start_times: { container: 'lunchStartTimesListContainer', input: 'newLunchStartTime', label: 'Time' },
-            lunch_end_times: { container: 'lunchEndTimesListContainer', input: 'newLunchEndTime', label: 'Time' }
+            lunch_end_times: { container: 'lunchEndTimesListContainer', input: 'newLunchEndTime', label: 'Time' },
+            tea_start_times: { container: 'teaStartTimesListContainer', input: 'newTeaStartTime', label: 'Time' },
+            tea_end_times: { container: 'teaEndTimesListContainer', input: 'newTeaEndTime', label: 'Time' }
         };
 
         function loadAllSettings() {
@@ -2247,6 +2344,8 @@
             loadDynamicField('shift_end_times', 'shiftEndContainer', 'shiftEnd', 'time');
             loadDynamicField('lunch_start_times', 'lunchStartContainer', 'lunchStart', 'time');
             loadDynamicField('lunch_end_times', 'lunchEndContainer', 'lunchEnd', 'time');
+            loadDynamicField('tea_start_times', 'teaStartContainer', 'teaStart', 'time');
+            loadDynamicField('tea_end_times', 'teaEndContainer', 'teaEnd', 'time');
         }
 
         function loadDynamicField(settingKey, containerId, fieldId, fallbackType) {
@@ -2477,9 +2576,32 @@
             });
         }
 
+        // Store last manual entry values
+        let lastManualEntry = {
+            line: '',
+            boq: '',
+            project: '',
+            typology: ''
+        };
+
         function showAddRecordModal() {
             // Set today's date as default
             document.getElementById('addDate').value = new Date().toISOString().split('T')[0];
+            
+            // Auto-fill from last entry or from settings dropdown options
+            if (lastManualEntry.line) {
+                document.getElementById('addLine').value = lastManualEntry.line;
+            }
+            if (lastManualEntry.boq) {
+                document.getElementById('addBOQ').value = lastManualEntry.boq;
+            }
+            if (lastManualEntry.project) {
+                document.getElementById('addProject').value = lastManualEntry.project;
+            }
+            if (lastManualEntry.typology) {
+                document.getElementById('addTypology').value = lastManualEntry.typology;
+            }
+            
             document.getElementById('addRecordModal').classList.add('active');
         }
 
@@ -2498,6 +2620,14 @@
                 alert('❌ Please fill all required fields (marked with *)');
                 return;
             }
+
+            // Remember values for next entry
+            lastManualEntry = {
+                line: line,
+                boq: boq,
+                project: project,
+                typology: typology
+            };
 
             const key = `line${line}_${boq.toLowerCase()}`;
             const newRecord = {
@@ -2701,6 +2831,9 @@
                 document.getElementById('pinModal').classList.remove('active');
                 document.getElementById('roleScreen').classList.add('hidden');
                 document.getElementById('setupScreen').classList.remove('hidden');
+                
+                // Load previous session data if available
+                loadPreviousSessionButton();
             } else {
                 document.getElementById('pinInput').value = '';
                 document.getElementById('pinInput').placeholder = '❌ Wrong PIN';
@@ -2708,6 +2841,82 @@
                     document.getElementById('pinInput').placeholder = '••••';
                 }, 1500);
             }
+        }
+
+        // ── Previous Session Data Feature ─────────────────
+        function loadPreviousSessionButton() {
+            // Check if there's a saved "last session" in Firebase
+            db.ref('settings/last_sessions').once('value', (snapshot) => {
+                const lastSessions = snapshot.val();
+                
+                if (lastSessions && Object.keys(lastSessions).length > 0) {
+                    // Get the most recent session (sorted by savedAt)
+                    const sessions = Object.entries(lastSessions);
+                    sessions.sort((a, b) => (b[1].savedAt || 0) - (a[1].savedAt || 0));
+                    const [lineKey, lastSession] = sessions[0];
+                    
+                    // Display the button with info
+                    const container = document.getElementById('previousSessionContainer');
+                    const info = document.getElementById('previousSessionInfo');
+                    
+                    const savedDate = new Date(lastSession.savedAt).toLocaleString();
+                    info.innerHTML = `
+                        <strong>Line ${lastSession.line}</strong> • ${lastSession.project} • ${lastSession.boq} • ${lastSession.typology}<br>
+                        Last used: ${savedDate}
+                    `;
+                    
+                    container.style.display = 'block';
+                    
+                    // Store for use
+                    window.cachedPreviousSession = lastSession;
+                } else {
+                    document.getElementById('previousSessionContainer').style.display = 'none';
+                }
+            });
+        }
+
+        function usePreviousSessionData() {
+            if (!window.cachedPreviousSession) return;
+            
+            const prev = window.cachedPreviousSession;
+            
+            // Auto-fill fields that exist
+            const fields = {
+                'project': prev.project,
+                'typology': prev.typology,
+                'line': prev.line,
+                'cycleTime': prev.cycleTime,
+                'shiftStart': prev.shiftStart,
+                'shiftEnd': prev.shiftEnd,
+                'lunchStart': prev.lunchStart,
+                'lunchEnd': prev.lunchEnd,
+                'teaStart': prev.teaStart,
+                'teaEnd': prev.teaEnd,
+                'totalManpower': prev.totalManpower,
+                'boq': prev.boq
+            };
+            
+            // Fill each field
+            Object.entries(fields).forEach(([fieldId, value]) => {
+                const element = document.getElementById(fieldId);
+                if (element && value !== undefined && value !== null) {
+                    element.value = value;
+                    
+                    // Add visual indicator that it was auto-filled
+                    element.style.borderColor = '#4caf50';
+                    element.style.borderWidth = '2px';
+                    setTimeout(() => {
+                        element.style.borderColor = '';
+                        element.style.borderWidth = '';
+                    }, 3000);
+                }
+            });
+            
+            // Hide the button after use
+            document.getElementById('previousSessionContainer').style.display = 'none';
+            
+            // Show success message
+            alert('✅ Previous session data loaded!\n\nPlease review and update:\n• Plan (target)\n• Present Manpower\n\nThen click "Start New Session"');
         }
 
         function cancelPIN() {
@@ -2996,7 +3205,20 @@
                             fill: false,
                             tension: 0.3,
                             pointRadius: 5,
-                            pointBackgroundColor: 'rgba(150, 150, 150, 1)'
+                            pointBackgroundColor: 'rgba(150, 150, 150, 1)',
+                            datalabels: {
+                                display: true,
+                                align: 'top',
+                                offset: 8,
+                                color: '#666',
+                                font: {
+                                    weight: 'bold',
+                                    size: 11
+                                },
+                                formatter: function(value) {
+                                    return value > 0 ? value : '';
+                                }
+                            }
                         },
                         {
                             label: 'Actual',
@@ -3014,7 +3236,27 @@
                                        '#f44336';
                             }),
                             pointBorderColor: '#fff',
-                            pointBorderWidth: 2
+                            pointBorderWidth: 2,
+                            datalabels: {
+                                display: true,
+                                align: 'bottom',
+                                offset: 8,
+                                color: function(context) {
+                                    const index = context.dataIndex;
+                                    const d = data[index];
+                                    const eff = d.plan > 0 ? (d.actual / d.plan) * 100 : 0;
+                                    return eff >= 90 ? '#4caf50' : 
+                                           eff >= 70 ? '#ff9800' : 
+                                           '#f44336';
+                                },
+                                font: {
+                                    weight: 'bold',
+                                    size: 12
+                                },
+                                formatter: function(value) {
+                                    return value > 0 ? value : '';
+                                }
+                            }
                         }
                     ]
                 },
@@ -3035,19 +3277,6 @@
                         legend: {
                             display: true,
                             position: 'top'
-                        },
-                        datalabels: {
-                            display: true,
-                            anchor: 'end',
-                            align: 'top',
-                            color: '#333',
-                            font: {
-                                weight: 'bold',
-                                size: 12
-                            },
-                            formatter: function(value) {
-                                return value > 0 ? value : '';
-                            }
                         }
                     }
                 },
@@ -3391,19 +3620,28 @@
                 return;
             }
             
+            // Helper to get value from dynamic field (handles both select and input)
+            function getFieldValue(fieldId) {
+                const element = document.getElementById(fieldId);
+                if (!element) return '';
+                return element.value || '';
+            }
+            
             // Get form values
             planTarget = parseInt(document.getElementById('plan').value);
-            const project = document.getElementById('project').value;
+            const project = getFieldValue('project');
             const boq = document.getElementById('boq').value;
-            const typology = document.getElementById('typology').value;
-            const line = document.getElementById('line').value;
+            const typology = getFieldValue('typology');
+            const line = getFieldValue('line');
             cycleTimeSeconds = parseInt(document.getElementById('cycleTime').value);
-            const shiftStartInput = document.getElementById('shiftStart').value;
-            const shiftEndInput = document.getElementById('shiftEnd').value;
+            const shiftStartInput = getFieldValue('shiftStart');
+            const shiftEndInput = getFieldValue('shiftEnd');
             const totalManpower = parseInt(document.getElementById('totalManpower').value);
             const present = parseInt(document.getElementById('present').value);
-            const lunchStartInput = document.getElementById('lunchStart').value;
-            const lunchEndInput = document.getElementById('lunchEnd').value;
+            const lunchStartInput = getFieldValue('lunchStart');
+            const lunchEndInput = getFieldValue('lunchEnd');
+            const teaStartInput = getFieldValue('teaStart');
+            const teaEndInput = getFieldValue('teaEnd');
             
             // Parse shift start and end times
             const [startHours, startMinutes] = shiftStartInput.split(':');
@@ -3443,6 +3681,8 @@
                 present: present,
                 lunchStart: lunchStartInput,
                 lunchEnd: lunchEndInput,
+                teaStart: teaStartInput,
+                teaEnd: teaEndInput,
                 startTime: shiftStartTime.toISOString(),
                 endTime: shiftEndTime.toISOString(),
                 actualCount: 0,
@@ -3486,6 +3726,7 @@
         function initializeHourlyData() {
             hourlyData = [];
             
+            // Parse lunch times
             let lunchStart = null;
             let lunchEnd = null;
             
@@ -3499,7 +3740,6 @@
                 lunchEnd = new Date(shiftStartTime);
                 lunchEnd.setHours(lunchEndH, lunchEndM, 0, 0);
                 
-                // If lunch is earlier than shift start, it's next day (night shift)
                 if (lunchStart < shiftStartTime) {
                     lunchStart.setDate(lunchStart.getDate() + 1);
                 }
@@ -3508,38 +3748,85 @@
                 }
             }
             
-            // Build hourly slots dynamically respecting shift end time
+            // Parse tea break times
+            let teaStart = null;
+            let teaEnd = null;
+            
+            if (sessionData.teaStart && sessionData.teaEnd) {
+                const [teaStartH, teaStartM] = sessionData.teaStart.split(':').map(Number);
+                const [teaEndH, teaEndM] = sessionData.teaEnd.split(':').map(Number);
+                
+                teaStart = new Date(shiftStartTime);
+                teaStart.setHours(teaStartH, teaStartM, 0, 0);
+                
+                teaEnd = new Date(shiftStartTime);
+                teaEnd.setHours(teaEndH, teaEndM, 0, 0);
+                
+                if (teaStart < shiftStartTime) {
+                    teaStart.setDate(teaStart.getDate() + 1);
+                }
+                if (teaEnd <= teaStart) {
+                    teaEnd.setDate(teaEnd.getDate() + 1);
+                }
+            }
+            
+            // Build time slots with break awareness
             const hourlySlots = [];
             let currentTime = new Date(shiftStartTime.getTime());
             let slotIndex = 0;
             
-            while (currentTime < shiftEndTime && slotIndex < 24) {
-                const slotStart = new Date(currentTime.getTime());
-                const slotEnd = new Date(Math.min(currentTime.getTime() + 3600000, shiftEndTime.getTime()));
+            while (currentTime < shiftEndTime && slotIndex < 50) {
+                let slotEnd = new Date(currentTime.getTime() + 3600000); // Default 1 hour
+                let breakType = null;
                 
-                // Mark as lunch if this slot contains the lunch start time
-                let isLunch = false;
-                if (lunchStart && lunchEnd) {
-                    if (slotStart <= lunchStart && slotEnd > lunchStart) {
-                        isLunch = true;
-                    }
+                // Check if lunch starts within this potential slot
+                if (lunchStart && lunchEnd && currentTime < lunchStart && slotEnd > lunchStart) {
+                    // Split slot at lunch start
+                    slotEnd = new Date(lunchStart.getTime());
+                } 
+                // Check if this IS lunch time
+                else if (lunchStart && lunchEnd && currentTime >= lunchStart && currentTime < lunchEnd) {
+                    slotEnd = new Date(lunchEnd.getTime());
+                    breakType = 'LUNCH';
+                }
+                // Check if tea break starts within this potential slot
+                else if (teaStart && teaEnd && currentTime < teaStart && slotEnd > teaStart) {
+                    // Split slot at tea start
+                    slotEnd = new Date(teaStart.getTime());
+                }
+                // Check if this IS tea time
+                else if (teaStart && teaEnd && currentTime >= teaStart && currentTime < teaEnd) {
+                    slotEnd = new Date(teaEnd.getTime());
+                    breakType = 'TEA';
                 }
                 
-                hourlySlots.push({
-                    index: slotIndex,
-                    startTime: slotStart,
-                    endTime: slotEnd,
-                    durationHours: (slotEnd - slotStart) / (1000 * 60 * 60),
-                    isLunch: isLunch
-                });
+                // Don't exceed shift end
+                if (slotEnd > shiftEndTime) {
+                    slotEnd = new Date(shiftEndTime.getTime());
+                }
+                
+                const durationHours = (slotEnd - currentTime) / (1000 * 60 * 60);
+                
+                // Only add slot if it has duration
+                if (durationHours > 0) {
+                    hourlySlots.push({
+                        index: slotIndex,
+                        startTime: currentTime,
+                        endTime: slotEnd,
+                        durationHours: durationHours,
+                        breakType: breakType,
+                        isLunch: breakType === 'LUNCH',
+                        isTea: breakType === 'TEA'
+                    });
+                    slotIndex++;
+                }
                 
                 currentTime = new Date(slotEnd.getTime());
-                slotIndex++;
             }
             
-            // Calculate total working hours (excluding lunch, including partial hours)
+            // Calculate total working hours (excluding all breaks)
             const totalWorkingHours = hourlySlots
-                .filter(slot => !slot.isLunch)
+                .filter(slot => !slot.breakType)
                 .reduce((sum, slot) => sum + slot.durationHours, 0);
             
             const targetPerHour = planTarget / totalWorkingHours;
@@ -3550,10 +3837,16 @@
             
             for (let i = 0; i < hourlySlots.length; i++) {
                 const slot = hourlySlots[i];
-                const periodLabel = `${formatTime(slot.startTime)} - ${formatTime(slot.endTime)}${slot.isLunch ? ' (LUNCH)' : ''}`;
+                let periodLabel = `${formatTime(slot.startTime)} - ${formatTime(slot.endTime)}`;
+                
+                if (slot.breakType === 'LUNCH') {
+                    periodLabel += ' (LUNCH)';
+                } else if (slot.breakType === 'TEA') {
+                    periodLabel += ' (TEA BREAK)';
+                }
                 
                 let hourTarget = 0;
-                if (!slot.isLunch) {
+                if (!slot.breakType) {
                     cumulativeTarget += targetPerHour * slot.durationHours;
                     const roundedCumulative = Math.round(cumulativeTarget * 2) / 2;
                     hourTarget = roundedCumulative - previousRoundedCumulative;
@@ -3568,6 +3861,8 @@
                     efficiency: 0,
                     cumulativeActual: 0,
                     isLunch: slot.isLunch,
+                    isTea: slot.isTea,
+                    breakType: slot.breakType,
                     durationHours: slot.durationHours
                 });
             }
@@ -3677,14 +3972,18 @@
             const timeToEnd = shiftEndTime - now;
             const minutesToEnd = Math.floor(timeToEnd / 60000);
             
+            console.log(`[Shift End Check] Now: ${now.toLocaleTimeString()}, Shift End: ${shiftEndTime.toLocaleTimeString()}, Minutes to end: ${minutesToEnd}`);
+            
             // Show warning 15 minutes before shift end
             if (minutesToEnd <= 15 && minutesToEnd > 0 && !shiftEndWarningShown) {
+                console.log('[Shift End] Showing 15-minute warning');
                 document.getElementById('shiftEndWarning').style.display = 'block';
                 shiftEndWarningShown = true;
             }
             
             // Auto-save and show modal at shift end
             if (now >= shiftEndTime) {
+                console.log('[Shift End] Shift has ended - triggering handleShiftEnd()');
                 handleShiftEnd();
             }
         }
@@ -3766,9 +4065,39 @@
                 
                 db.ref(`daily_reports/${today}/${reportKey}`).set(dailyReport).then(() => {
                     console.log('Daily report saved with downtime events');
+                    
+                    // Save this session as "last session" for future use
+                    saveAsLastSession();
                 }).catch(e => {
                     console.error('Error saving daily report:', e);
                 });
+            });
+        }
+
+        function saveAsLastSession() {
+            if (!sessionData) return;
+            
+            const lineKey = `line${sessionData.line}`;
+            const lastSessionData = {
+                line: sessionData.line,
+                project: sessionData.project,
+                boq: sessionData.boq,
+                typology: sessionData.typology,
+                cycleTime: sessionData.cycleTime,
+                shiftStart: sessionData.shiftStart,
+                shiftEnd: sessionData.shiftEnd,
+                lunchStart: sessionData.lunchStart,
+                lunchEnd: sessionData.lunchEnd,
+                teaStart: sessionData.teaStart,
+                teaEnd: sessionData.teaEnd,
+                totalManpower: sessionData.totalManpower,
+                savedAt: Date.now()
+            };
+            
+            db.ref(`settings/last_sessions/${lineKey}`).set(lastSessionData).then(() => {
+                console.log('Saved as last session for future use');
+            }).catch(e => {
+                console.error('Error saving last session:', e);
             });
         }
 
@@ -3890,8 +4219,8 @@
             // Initial update
             updateTimers();
             
-            // Auto-save every 10 seconds
-            setInterval(saveSession, 10000);
+            // Auto-save every 30 seconds (reduced from 10s to save bandwidth)
+            setInterval(saveSession, 30000);
             
             // Check for shift end every 60 seconds
             shiftEndCheckInterval = setInterval(checkShiftEnd, 60000);
