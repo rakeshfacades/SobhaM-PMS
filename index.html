@@ -12,6 +12,7 @@
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
     <script>
         const firebaseConfig = {
             apiKey: "AIzaSyBkx_aqxvWlX0HGWD0xxTB7WbSegoTSZSo",
@@ -24,6 +25,7 @@
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+        const storage = firebase.storage();
     </script>
     <style>
         * {
@@ -817,6 +819,186 @@
                 max-width: 120px;
             }
         }
+        
+        /* ── New Top Stats Bar & Cycle Progress ────────── */
+        .top-stats-bar {
+            background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%);
+            color: white;
+            padding: 16px 24px 12px 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .stats-row {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .stat-line {
+            flex-direction: row;
+            gap: 8px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .stat-line .separator {
+            opacity: 0.7;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .stat-expected {
+            color: #fff3cd;
+        }
+        
+        .stat-actual {
+            color: #d4edda;
+        }
+        
+        .stat-efficiency {
+            color: #ffffff;
+        }
+        
+        /* Cycle Time Progress Bar */
+        .cycle-progress-container {
+            position: relative;
+            height: 32px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 16px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+        
+        .cycle-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50 0%, #8bc34a 50%, #ffeb3b 100%);
+            transition: width 1s linear, background 0.3s ease;
+            border-radius: 16px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .cycle-progress-bar.warning {
+            background: linear-gradient(90deg, #ff9800 0%, #ff5722 100%);
+        }
+        
+        .cycle-progress-bar.danger {
+            background: linear-gradient(90deg, #f44336 0%, #d32f2f 100%);
+        }
+        
+        .cycle-time-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+        
+        /* Main Content Area */
+        .main-content-area {
+            height: calc(100vh - 180px);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .pms-dashboard-view {
+            height: 100%;
+            overflow-y: auto;
+        }
+        
+        /* Content Carousel */
+        .content-carousel-view {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #1a1a1a;
+        }
+        
+        .carousel-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            overflow: hidden;
+        }
+        
+        .carousel-content img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        .carousel-content video {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        .carousel-indicator {
+            padding: 16px;
+            text-align: center;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+        }
+        
+        /* Fade transitions */
+        .fade-out {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in forwards;
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Celebration animation */
+        .celebration {
+            animation: celebrate 0.6s ease-out;
+        }
+        
+        @keyframes celebrate {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
     </style>
 </head>
 <body>
@@ -1009,8 +1191,48 @@
 
         <!-- Monitor Screen -->
         <div class="monitor-screen hidden" id="monitorScreen">
-            <!-- Single Line Header Info -->
-            <div class="header-info-line">
+            
+            <!-- NEW: Compact Top Stats Bar -->
+            <div class="top-stats-bar" id="topStatsBar">
+                <div class="stats-row">
+                    <div class="stat-item stat-line">
+                        <span id="displayLineCompact">Line --</span>
+                        <span class="separator">-</span>
+                        <span id="displayProjectCompact">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Plan</span>
+                        <span class="stat-value" id="displayPlanCompact">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Expected</span>
+                        <span class="stat-value stat-expected" id="displayExpected">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Actual</span>
+                        <span class="stat-value stat-actual" id="displayActualCompact">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Efficiency</span>
+                        <span class="stat-value stat-efficiency" id="displayEfficiencyCompact">--%</span>
+                    </div>
+                </div>
+                
+                <!-- Cycle Time Progress Bar -->
+                <div class="cycle-progress-container">
+                    <div class="cycle-progress-bar" id="cycleProgressBar"></div>
+                    <div class="cycle-time-text" id="cycleTimeText">--:-- remaining</div>
+                </div>
+            </div>
+            
+            <!-- Main Content Area -->
+            <div class="main-content-area" id="mainContentArea">
+                
+                <!-- PMS Dashboard (Default View) -->
+                <div class="pms-dashboard-view" id="pmsDashboardView">
+            
+            <!-- OLD: Single Line Header Info (KEEPING FOR COMPATIBILITY) -->
+            <div class="header-info-line" style="display: none;">
                 <div class="info-item-inline">
                     <span class="info-label-inline">Project:</span>
                     <span class="info-value-inline" id="displayProject">--</span>
@@ -1104,6 +1326,20 @@
                     <div class="metric-value" id="totalDowntimeValue">00:00</div>
                 </div>
             </div>
+
+            </div><!-- Close pms-dashboard-view -->
+            
+            <!-- Content Carousel View (Hidden by default) -->
+            <div class="content-carousel-view hidden" id="contentCarouselView">
+                <div class="carousel-content" id="carouselContent">
+                    <!-- Carousel items will be displayed here -->
+                </div>
+                <div class="carousel-indicator">
+                    <span id="carouselIndicator">Press any key to return</span>
+                </div>
+            </div>
+            
+            </div><!-- Close main-content-area -->
 
             <div class="instructions">
                 ⌨️ Press SPACEBAR to increase Actual | Press BACKSPACE to decrease Actual | Press D to Start/Stop Downtime
@@ -1317,6 +1553,9 @@
             <button class="dashboard-tab" onclick="switchAdminTab('records')" id="adminTabRecords">
                 Daily Records
             </button>
+            <button class="dashboard-tab" onclick="switchAdminTab('carousel')" id="adminTabCarousel">
+                📺 Content Carousel
+            </button>
             <button class="dashboard-tab" onclick="switchAdminTab('settings')" id="adminTabSettings">
                 Settings
             </button>
@@ -1360,12 +1599,19 @@
             <div style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2 style="margin: 0; color: #333;">📅 Daily Production Records</h2>
-                    <div style="display: flex; gap: 12px;">
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
                         <button onclick="showAddRecordModal()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
                             ➕ Add Manual Entry
                         </button>
+                        <button onclick="downloadExcelTemplate()" style="padding: 10px 20px; background: #2196f3; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                            📄 Download Template
+                        </button>
+                        <button onclick="document.getElementById('excelUploadInput').click()" style="padding: 10px 20px; background: #ff9800; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                            📤 Upload Excel
+                        </button>
+                        <input type="file" id="excelUploadInput" accept=".xlsx,.xls" style="display: none;" onchange="handleExcelUpload(event)">
                         <button onclick="exportHistoryToExcel()" style="padding: 10px 20px; background: #4caf50; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                            📥 Export to Excel
+                            📥 Export Data
                         </button>
                         <button onclick="showBulkDeleteModal()" style="padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
                             🗑️ Bulk Delete
@@ -1419,6 +1665,98 @@
                 <div id="dailyRecordsTable"></div>
             </div>
 
+        </div>
+
+        <!-- Content Carousel Tab Content -->
+        <div id="adminCarouselContent" style="display: none; max-width: 1400px; margin: 0 auto; padding: 20px;">
+            
+            <div style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <h2 style="margin: 0 0 20px 0; color: #333;">📺 Content Carousel Management</h2>
+                
+                <!-- Step 1: Select Line & BOQ -->
+                <div style="margin-bottom: 30px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">Step 1: Select Line & BOQ</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Line</label>
+                            <select id="carouselLineSelect" onchange="loadCarouselManagement()" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="">Select Line</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">BOQ</label>
+                            <select id="carouselBoqSelect" onchange="loadCarouselManagement()" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="">Select BOQ</option>
+                                <option value="ACP">ACP</option>
+                                <option value="CW">CW</option>
+                                <option value="WW">WW</option>
+                                <option value="UCW">UCW</option>
+                                <option value="Door">Door</option>
+                                <option value="Window">Window</option>
+                                <option value="Non-System">Non-System</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: flex-end;">
+                            <button onclick="loadCarouselManagement()" style="width: 100%; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                                Load Content
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Content Library (shown after selection) -->
+                <div id="carouselContentLibrary" style="display: none;">
+                    
+                    <!-- Settings -->
+                    <div style="margin-bottom: 30px; padding: 20px; background: #e3f2fd; border-radius: 8px;">
+                        <h3 style="margin: 0 0 16px 0; color: #333;">⚙️ Settings</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Idle Timeout (seconds)</label>
+                                <input type="number" id="carouselIdleTimeout" value="45" min="10" max="300" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="carouselEnabled" checked style="margin-right: 8px;">
+                                    <span style="font-weight: 500;">Enable Carousel</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 16px; padding: 16px; background: white; border-radius: 4px;">
+                            <h4 style="margin: 0 0 12px 0; color: #333; font-size: 14px;">📋 Copy from Another Line</h4>
+                            <div style="display: flex; gap: 12px;">
+                                <select id="copyFromLineSelect" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <option value="">Select source line/BOQ</option>
+                                </select>
+                                <button onclick="copyCarouselContent()" style="padding: 10px 20px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                                    Copy Content
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <button onclick="saveCarouselSettings()" style="margin-top: 16px; padding: 10px 24px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            💾 Save Settings
+                        </button>
+                    </div>
+                    
+                    <!-- Content Items -->
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h3 style="margin: 0; color: #333;">📂 Content Items <span id="carouselItemCount">(0 / 5)</span></h3>
+                            <button onclick="showAddCarouselItemModal()" id="btnAddCarouselItem" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                                ➕ Add Content
+                            </button>
+                        </div>
+                        <div id="carouselItemsList" style="display: grid; gap: 16px;">
+                            <!-- Items will be loaded here -->
+                        </div>
+                    </div>
+                    
+                </div>
+                
+            </div>
+            
         </div>
 
         <!-- Settings Tab Content -->
@@ -1675,6 +2013,98 @@
         </div>
     </div>
 
+    <!-- Add Carousel Content Modal -->
+    <div class="pin-modal" id="addCarouselItemModal">
+        <div class="pin-modal-content" style="max-width: 600px;">
+            <h2>➕ Add Carousel Content</h2>
+            
+            <div style="margin: 20px 0;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Upload File</label>
+                <input type="file" id="carouselFileInput" accept="image/jpeg,image/jpg,image/png,image/gif,video/mp4,video/mov" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <p style="margin: 8px 0 0 0; font-size: 12px; color: #666;">
+                    Accepted: JPG, PNG, GIF, MP4, MOV | Max size: 50 MB
+                </p>
+                <div id="carouselUploadProgress" style="display: none; margin-top: 12px;">
+                    <div style="background: #e0e0e0; border-radius: 4px; height: 8px; overflow: hidden;">
+                        <div id="carouselUploadProgressBar" style="background: #4caf50; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                    <p id="carouselUploadStatus" style="margin: 4px 0 0 0; font-size: 12px; color: #666;"></p>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Display Duration (seconds)</label>
+                    <input type="number" id="carouselItemDuration" value="60" min="5" max="300" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Sequence Order</label>
+                    <input type="number" id="carouselItemSequence" value="1" min="1" max="100" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="btn-modal-confirm" onclick="uploadCarouselItem()">
+                    ⬆️ Upload & Save
+                </button>
+                <button class="btn-modal-cancel" onclick="closeAddCarouselItemModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Excel Import Preview Modal -->
+    <div class="pin-modal" id="excelImportModal">
+        <div class="pin-modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+            <h2>📤 Import Excel Data</h2>
+            
+            <div id="importSummary" style="margin: 20px 0; padding: 16px; background: #f5f7fa; border-radius: 8px;">
+                <!-- Summary will be inserted here -->
+            </div>
+            
+            <div id="importErrors" style="display: none; margin: 20px 0; padding: 16px; background: #ffebee; border-left: 4px solid #f44336; border-radius: 4px;">
+                <h3 style="margin: 0 0 12px 0; color: #c62828;">❌ Errors Found:</h3>
+                <div id="errorList"></div>
+            </div>
+            
+            <div id="importDuplicates" style="display: none; margin: 20px 0; padding: 16px; background: #fff3e0; border-left: 4px solid #ff9800; border-radius: 4px;">
+                <h3 style="margin: 0 0 12px 0; color: #f57c00;">⚠️ Duplicates Found:</h3>
+                <div id="duplicateList"></div>
+                <div style="margin-top: 12px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">How to handle duplicates?</label>
+                    <select id="duplicateHandling" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="skip">Skip duplicates (keep existing data)</option>
+                        <option value="overwrite">Overwrite duplicates (replace with new data)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="importPreview" style="margin: 20px 0; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead style="position: sticky; top: 0; background: #f5f7fa;">
+                        <tr>
+                            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: left;">Date</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: left;">Line</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: left;">BOQ</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: left;">Project</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: center;">Plan</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: center;">Actual</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: center;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="previewTableBody">
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="btn-modal-confirm" onclick="confirmBulkImport()" id="importConfirmBtn">
+                    ✅ Import Records
+                </button>
+                <button class="btn-modal-cancel" onclick="closeExcelImportModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Bulk Delete Modal -->
     <div class="pin-modal" id="bulkDeleteModal">
         <div class="pin-modal-content" style="max-width: 500px;">
@@ -1690,6 +2120,114 @@
             <div class="modal-buttons">
                 <button class="btn-modal-confirm" onclick="executeBulkDelete()" style="background: #f44336;">🗑️ Delete Records</button>
                 <button class="btn-modal-cancel" onclick="closeBulkDeleteModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Live Session Modal -->
+    <div class="pin-modal" id="editLiveSessionModal">
+        <div class="pin-modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+            <h2>✏️ Edit Live Session</h2>
+            <p style="color: #666; margin-bottom: 20px;">Editing: <strong id="editSessionTitle"></strong></p>
+            
+            <!-- Safe Edits Section -->
+            <div style="margin-bottom: 24px; padding: 20px; background: #f5f7fa; border-radius: 8px;">
+                <h3 style="margin: 0 0 16px 0; color: #333; font-size: 16px;">📝 Basic Information (Safe to Edit)</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Project</label>
+                        <input type="text" id="editProject" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">BOQ</label>
+                        <select id="editBoq" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="ACP">ACP</option>
+                            <option value="CW">CW</option>
+                            <option value="WW">WW</option>
+                            <option value="UCW">UCW</option>
+                            <option value="Door">Door</option>
+                            <option value="Window">Window</option>
+                            <option value="Non-System">Non-System</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Typology</label>
+                        <input type="text" id="editTypology" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Cycle Time (seconds)</label>
+                        <input type="number" id="editCycleTime" min="1" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Production Targets Section -->
+            <div style="margin-bottom: 24px; padding: 20px; background: #fff3e0; border-radius: 8px; border-left: 4px solid #ff9800;">
+                <h3 style="margin: 0 0 16px 0; color: #333; font-size: 16px;">🎯 Production Targets (Recalculates)</h3>
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Plan (Target)</label>
+                    <input type="number" id="editPlan" min="1" onchange="previewPlanChange()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <p style="margin: 6px 0 0 0; font-size: 12px; color: #666;">ℹ️ Changing plan recalculates hourly targets and efficiency</p>
+                </div>
+                <div id="planChangePreview" style="display: none; margin-top: 12px; padding: 12px; background: white; border-radius: 4px; font-size: 13px;">
+                    <!-- Preview will be inserted here -->
+                </div>
+            </div>
+            
+            <!-- Manpower Section -->
+            <div style="margin-bottom: 24px; padding: 20px; background: #e3f2fd; border-radius: 8px;">
+                <h3 style="margin: 0 0 16px 0; color: #333; font-size: 16px;">👥 Manpower</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Total Manpower</label>
+                        <input type="number" id="editTotalManpower" min="1" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Present</label>
+                        <input type="number" id="editPresent" min="0" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Advanced Section -->
+            <div style="margin-bottom: 24px; padding: 20px; background: #ffebee; border-radius: 8px; border-left: 4px solid #f44336;">
+                <div style="margin-bottom: 16px;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="enableAdvancedEdit" onchange="toggleAdvancedEdit()" style="margin-right: 8px;">
+                        <span style="font-weight: 500; color: #c62828;">⚠️ Enable Advanced Editing (Use with Caution)</span>
+                    </label>
+                </div>
+                
+                <div id="advancedEditFields" style="display: none;">
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Actual Count (Manual Override)</label>
+                        <input type="number" id="editActual" min="0" disabled style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f5f5f5;">
+                        <p style="margin: 6px 0 0 0; font-size: 12px; color: #d32f2f;">⚠️ Warning: This overrides actual count. Hourly breakdown won't match.</p>
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; font-size: 13px; color: #666;">Shift End Time (Extend Only)</label>
+                        <input type="time" id="editShiftEnd" disabled style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #f5f5f5;">
+                        <p style="margin: 6px 0 0 0; font-size: 12px; color: #d32f2f;">⚠️ Warning: Can only extend shift. Auto-end trigger will update.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Locked Section -->
+            <div style="margin-bottom: 24px; padding: 20px; background: #fafafa; border-radius: 8px; border: 1px solid #ddd;">
+                <h3 style="margin: 0 0 12px 0; color: #666; font-size: 16px;">🔒 Locked (Cannot Change)</h3>
+                <p style="margin: 0; font-size: 13px; color: #999;">
+                    Shift Start, Lunch Times, Tea Break Times<br>
+                    <em style="font-size: 12px;">These would invalidate all hourly data and cannot be changed during live session.</em>
+                </p>
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="btn-modal-confirm" onclick="saveSessionEdits()">
+                    💾 Save Changes
+                </button>
+                <button class="btn-modal-cancel" onclick="closeEditLiveSessionModal()">Cancel</button>
             </div>
         </div>
     </div>
@@ -1805,6 +2343,21 @@
         const EDIT_PASSWORD = 'Sobha123';
         const MONITOR_PIN = '0987';
         const ADMIN_PASSWORD = 'Admin@2026';
+        
+        // ── Cycle Time & Expected Counter Variables ──────
+        let currentCycleStartTime = null;
+        let cycleProgressInterval = null;
+        let expectedCount = 0;
+        
+        // ── Content Carousel Variables ──────
+        let carouselActive = false;
+        let carouselItems = [];
+        let currentCarouselIndex = 0;
+        let carouselPlayInterval = null;
+        let idleTimer = null;
+        let idleTimeout = 45; // seconds
+        let lastActivityTime = Date.now();
+
 
         // ── Role Selection ──────────────────────────────
         function selectMonitorRole() {
@@ -1949,6 +2502,9 @@
                                 <div style="display: flex; gap: 8px;">
                                     <button onclick="viewSessionAsAdmin('${sessionId}')" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer;">
                                         📊 View
+                                    </button>
+                                    <button onclick="editLiveSession('${sessionId}')" style="padding: 8px 16px; background: #ff9800; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                        ✏️ Edit
                                     </button>
                                     <button onclick="endSessionAsAdmin('${sessionId}')" style="padding: 8px 16px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer;">
                                         🛑 End
@@ -2192,6 +2748,259 @@
             });
         }
 
+        // ── Live Session Editing ─────────────────
+        let currentEditSessionId = null;
+        let currentEditSessionData = null;
+
+        function editLiveSession(sessionId) {
+            currentEditSessionId = sessionId;
+            
+            // Load session data
+            db.ref(`sessions/${sessionId}`).once('value', (snapshot) => {
+                const data = snapshot.val();
+                if (!data) {
+                    alert('❌ Session not found');
+                    return;
+                }
+                
+                currentEditSessionData = data;
+                
+                // Populate modal fields
+                document.getElementById('editSessionTitle').textContent = `Line ${data.line} - ${data.project} (${data.boq})`;
+                document.getElementById('editProject').value = data.project || '';
+                document.getElementById('editBoq').value = data.boq || 'ACP';
+                document.getElementById('editTypology').value = data.typology || '';
+                document.getElementById('editCycleTime').value = data.cycleTime || 60;
+                document.getElementById('editPlan').value = data.plan || 0;
+                document.getElementById('editTotalManpower').value = data.totalManpower || 0;
+                document.getElementById('editPresent').value = data.present || 0;
+                document.getElementById('editActual').value = data.actualCount || 0;
+                document.getElementById('editShiftEnd').value = data.shiftEnd || '';
+                
+                // Reset advanced mode
+                document.getElementById('enableAdvancedEdit').checked = false;
+                toggleAdvancedEdit();
+                
+                // Show modal
+                document.getElementById('editLiveSessionModal').classList.add('active');
+            });
+        }
+
+        function toggleAdvancedEdit() {
+            const enabled = document.getElementById('enableAdvancedEdit').checked;
+            const fieldsDiv = document.getElementById('advancedEditFields');
+            const actualInput = document.getElementById('editActual');
+            const shiftEndInput = document.getElementById('editShiftEnd');
+            
+            if (enabled) {
+                fieldsDiv.style.display = 'block';
+                actualInput.disabled = false;
+                actualInput.style.background = 'white';
+                shiftEndInput.disabled = false;
+                shiftEndInput.style.background = 'white';
+            } else {
+                fieldsDiv.style.display = 'none';
+                actualInput.disabled = true;
+                actualInput.style.background = '#f5f5f5';
+                shiftEndInput.disabled = true;
+                shiftEndInput.style.background = '#f5f5f5';
+            }
+        }
+
+        function closeEditLiveSessionModal() {
+            document.getElementById('editLiveSessionModal').classList.remove('active');
+            document.getElementById('planChangePreview').style.display = 'none';
+            currentEditSessionId = null;
+            currentEditSessionData = null;
+        }
+
+        function previewPlanChange() {
+            if (!currentEditSessionData) return;
+            
+            const newPlan = parseInt(document.getElementById('editPlan').value) || 0;
+            const oldPlan = currentEditSessionData.plan || 0;
+            const actual = currentEditSessionData.actualCount || 0;
+            
+            if (newPlan === oldPlan) {
+                document.getElementById('planChangePreview').style.display = 'none';
+                return;
+            }
+            
+            const oldEfficiency = oldPlan > 0 ? Math.round((actual / oldPlan) * 100) : 0;
+            const newEfficiency = newPlan > 0 ? Math.round((actual / newPlan) * 100) : 0;
+            
+            const preview = document.getElementById('planChangePreview');
+            preview.innerHTML = `
+                <strong>Impact Preview:</strong><br>
+                Old: Plan ${oldPlan}, Actual ${actual}, Efficiency ${oldEfficiency}%<br>
+                New: Plan ${newPlan}, Actual ${actual}, Efficiency <strong style="color: ${newEfficiency >= 100 ? '#4caf50' : newEfficiency >= 80 ? '#ff9800' : '#f44336'}">${newEfficiency}%</strong><br>
+                <em>Hourly targets will be recalculated automatically</em>
+            `;
+            preview.style.display = 'block';
+        }
+
+        function saveSessionEdits() {
+            if (!currentEditSessionId || !currentEditSessionData) {
+                alert('❌ No session to edit');
+                return;
+            }
+            
+            const updates = {};
+            let planChanged = false;
+            let actualChanged = false;
+            let shiftEndChanged = false;
+            
+            // Safe edits
+            const newProject = document.getElementById('editProject').value.trim();
+            const newBoq = document.getElementById('editBoq').value;
+            const newTypology = document.getElementById('editTypology').value.trim();
+            const newCycleTime = parseInt(document.getElementById('editCycleTime').value);
+            const newTotalManpower = parseInt(document.getElementById('editTotalManpower').value);
+            const newPresent = parseInt(document.getElementById('editPresent').value);
+            
+            if (newProject !== currentEditSessionData.project) updates.project = newProject;
+            if (newBoq !== currentEditSessionData.boq) updates.boq = newBoq;
+            if (newTypology !== currentEditSessionData.typology) updates.typology = newTypology;
+            if (newCycleTime !== currentEditSessionData.cycleTime) updates.cycleTime = newCycleTime;
+            if (newTotalManpower !== currentEditSessionData.totalManpower) updates.totalManpower = newTotalManpower;
+            if (newPresent !== currentEditSessionData.present) updates.present = newPresent;
+            
+            // Plan change (requires recalculation)
+            const newPlan = parseInt(document.getElementById('editPlan').value);
+            if (newPlan !== currentEditSessionData.plan) {
+                if (newPlan <= 0) {
+                    alert('❌ Plan must be positive');
+                    return;
+                }
+                planChanged = true;
+                updates.plan = newPlan;
+            }
+            
+            // Advanced edits
+            if (document.getElementById('enableAdvancedEdit').checked) {
+                const newActual = parseInt(document.getElementById('editActual').value);
+                const newShiftEnd = document.getElementById('editShiftEnd').value;
+                
+                if (newActual !== currentEditSessionData.actualCount) {
+                    if (!confirm('⚠️ Warning: Changing actual count manually will override hourly data. The hourly breakdown won\'t match the total.\n\nContinue?')) {
+                        return;
+                    }
+                    actualChanged = true;
+                    updates.actualCount = newActual;
+                    updates.manualActualOverride = true;
+                }
+                
+                if (newShiftEnd !== currentEditSessionData.shiftEnd) {
+                    const oldShiftEndTime = new Date(currentEditSessionData.endTime);
+                    const [newHours, newMinutes] = newShiftEnd.split(':');
+                    const newShiftEndTime = new Date(oldShiftEndTime);
+                    newShiftEndTime.setHours(parseInt(newHours), parseInt(newMinutes), 0, 0);
+                    
+                    if (newShiftEndTime < oldShiftEndTime) {
+                        alert('❌ Cannot shorten shift end time. Can only extend.\n\nTo end early, use the "End Session" button instead.');
+                        return;
+                    }
+                    
+                    if (!confirm('⚠️ Warning: Extending shift end time.\n\nThe auto-end trigger will activate at the new time.\n\nContinue?')) {
+                        return;
+                    }
+                    
+                    shiftEndChanged = true;
+                    updates.shiftEnd = newShiftEnd;
+                    updates.endTime = newShiftEndTime.toISOString();
+                }
+            }
+            
+            // Validation
+            if (newPresent > newTotalManpower) {
+                alert('❌ Present manpower cannot exceed total manpower');
+                return;
+            }
+            
+            if (Object.keys(updates).length === 0) {
+                alert('ℹ️ No changes detected');
+                return;
+            }
+            
+            // Apply updates
+            updates.lastUpdated = Date.now();
+            
+            // If plan changed, recalculate efficiency and hourly targets
+            if (planChanged) {
+                const actual = actualChanged ? updates.actualCount : currentEditSessionData.actualCount;
+                const efficiency = newPlan > 0 ? Math.round((actual / newPlan) * 100) : 0;
+                updates.efficiency = efficiency;
+                
+                // Recalculate hourly targets
+                const hourlyData = recalculateHourlyTargets(currentEditSessionData, newPlan);
+                if (hourlyData) {
+                    updates.hourlyData = hourlyData;
+                }
+            }
+            
+            // If only actual changed, recalculate efficiency
+            if (actualChanged && !planChanged) {
+                const plan = currentEditSessionData.plan;
+                const efficiency = plan > 0 ? Math.round((updates.actualCount / plan) * 100) : 0;
+                updates.efficiency = efficiency;
+            }
+            
+            // Save to Firebase
+            db.ref(`sessions/${currentEditSessionId}`).update(updates).then(() => {
+                let message = '✅ Session updated successfully!\n\n';
+                if (planChanged) message += '• Plan changed - hourly targets recalculated\n';
+                if (actualChanged) message += '• Actual count manually overridden\n';
+                if (shiftEndChanged) message += '• Shift end time extended\n';
+                
+                alert(message);
+                closeEditLiveSessionModal();
+            }).catch(err => {
+                console.error('Error updating session:', err);
+                alert('❌ Error updating session: ' + err.message);
+            });
+        }
+
+        function recalculateHourlyTargets(sessionData, newPlan) {
+            try {
+                const hourlyData = sessionData.hourlyData || [];
+                if (hourlyData.length === 0) return null;
+                
+                // Calculate total working hours (excluding breaks)
+                const totalWorkingHours = hourlyData
+                    .filter(slot => !slot.breakType && !slot.isLunch && !slot.isTea)
+                    .reduce((sum, slot) => sum + (slot.durationHours || 1), 0);
+                
+                if (totalWorkingHours === 0) return null;
+                
+                const targetPerHour = newPlan / totalWorkingHours;
+                
+                // Recalculate targets using cumulative rounding
+                let cumulativeTarget = 0;
+                let previousRoundedCumulative = 0;
+                
+                const newHourlyData = hourlyData.map(slot => {
+                    let newTarget = 0;
+                    
+                    if (!slot.breakType && !slot.isLunch && !slot.isTea) {
+                        cumulativeTarget += targetPerHour * (slot.durationHours || 1);
+                        const roundedCumulative = Math.round(cumulativeTarget * 2) / 2;
+                        newTarget = roundedCumulative - previousRoundedCumulative;
+                        previousRoundedCumulative = roundedCumulative;
+                    }
+                    
+                    return {
+                        ...slot,
+                        target: newTarget
+                    };
+                });
+                
+                return newHourlyData;
+            } catch (err) {
+                console.error('Error recalculating hourly targets:', err);
+                return null;
+            }
+        }
+
         function deleteSession(sessionId) {
             if (!confirm('Permanently delete this session?')) return;
             
@@ -2230,17 +3039,27 @@
                 document.getElementById('adminTabDashboard').classList.add('active');
                 document.getElementById('adminDashboardContent').style.display = 'block';
                 document.getElementById('adminRecordsContent').style.display = 'none';
+                document.getElementById('adminCarouselContent').style.display = 'none';
                 document.getElementById('adminSettingsContent').style.display = 'none';
             } else if (tab === 'records') {
                 document.getElementById('adminTabRecords').classList.add('active');
                 document.getElementById('adminDashboardContent').style.display = 'none';
                 document.getElementById('adminRecordsContent').style.display = 'block';
+                document.getElementById('adminCarouselContent').style.display = 'none';
                 document.getElementById('adminSettingsContent').style.display = 'none';
                 loadDailyRecords();
+            } else if (tab === 'carousel') {
+                document.getElementById('adminTabCarousel').classList.add('active');
+                document.getElementById('adminDashboardContent').style.display = 'none';
+                document.getElementById('adminRecordsContent').style.display = 'none';
+                document.getElementById('adminCarouselContent').style.display = 'block';
+                document.getElementById('adminSettingsContent').style.display = 'none';
+                initCarouselManagement();
             } else if (tab === 'settings') {
                 document.getElementById('adminTabSettings').classList.add('active');
                 document.getElementById('adminDashboardContent').style.display = 'none';
                 document.getElementById('adminRecordsContent').style.display = 'none';
+                document.getElementById('adminCarouselContent').style.display = 'none';
                 document.getElementById('adminSettingsContent').style.display = 'block';
                 loadAllSettings();
             }
@@ -2822,6 +3641,625 @@
                 window.URL.revokeObjectURL(url);
 
                 alert('✅ Excel file downloaded!');
+            });
+        }
+
+        // ── Bulk Excel Import ─────────────────
+        let pendingImportData = [];
+
+        function downloadExcelTemplate() {
+            // Create CSV template (Excel compatible)
+            const headers = ['Date', 'Line', 'BOQ', 'Project', 'Typology', 'Plan', 'Actual', 'Manpower', 'Downtime (min)'];
+            const exampleRow = ['2026-03-01', '1', 'ACP', 'Villa A', 'Type A', '60', '52', '8', '45'];
+            const instructions = [
+                '# Instructions:',
+                '# 1. Date format: YYYY-MM-DD (e.g., 2026-03-15)',
+                '# 2. Line: Must exist in your settings',
+                '# 3. BOQ: ACP, CW, WW, UCW, Door, Window, or Non-System',
+                '# 4. All fields required except Typology and Downtime',
+                '# 5. Delete this instruction block and example row before uploading',
+                '# 6. Maximum 500 rows',
+                ''
+            ];
+            
+            const csv = instructions.join('\n') + '\n' + 
+                       headers.join(',') + '\n' + 
+                       exampleRow.join(',');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'Production_Import_Template.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            alert('✅ Template downloaded!\n\nFill in your data and upload it back.');
+        }
+
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = e.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    if (jsonData.length === 0) {
+                        alert('❌ File is empty or has no valid data');
+                        return;
+                    }
+                    
+                    if (jsonData.length > 500) {
+                        alert('❌ Too many rows! Maximum 500 rows allowed.\n\nYour file has ' + jsonData.length + ' rows.');
+                        return;
+                    }
+                    
+                    processImportData(jsonData);
+                } catch (err) {
+                    console.error('Error reading Excel file:', err);
+                    alert('❌ Error reading file. Please make sure it\'s a valid Excel/CSV file.');
+                }
+            };
+            reader.readAsBinaryString(file);
+            
+            // Reset file input
+            event.target.value = '';
+        }
+
+        function processImportData(jsonData) {
+            const validRecords = [];
+            const errors = [];
+            const duplicates = [];
+            
+            // Valid BOQ options
+            const validBOQs = ['ACP', 'CW', 'WW', 'UCW', 'Door', 'Window', 'Non-System'];
+            
+            jsonData.forEach((row, index) => {
+                const rowNum = index + 2; // +2 because row 1 is headers
+                const record = {
+                    date: row['Date'] || row['date'],
+                    line: String(row['Line'] || row['line'] || '').trim(),
+                    boq: String(row['BOQ'] || row['boq'] || '').trim(),
+                    project: String(row['Project'] || row['project'] || '').trim(),
+                    typology: String(row['Typology'] || row['typology'] || '').trim(),
+                    plan: parseInt(row['Plan'] || row['plan'] || 0),
+                    actual: parseInt(row['Actual'] || row['actual'] || 0),
+                    manpower: parseInt(row['Manpower'] || row['manpower'] || 0),
+                    downtimeMinutes: parseInt(row['Downtime (min)'] || row['Downtime'] || 0),
+                    rowNum: rowNum
+                };
+                
+                // Validate
+                const rowErrors = [];
+                
+                if (!record.date) {
+                    rowErrors.push('Date missing');
+                } else {
+                    // Validate date format
+                    const dateObj = new Date(record.date);
+                    if (isNaN(dateObj.getTime())) {
+                        rowErrors.push('Invalid date format');
+                    } else {
+                        record.date = dateObj.toISOString().split('T')[0];
+                    }
+                }
+                
+                if (!record.line) rowErrors.push('Line missing');
+                if (!record.boq) rowErrors.push('BOQ missing');
+                if (!validBOQs.includes(record.boq)) rowErrors.push(`Invalid BOQ (must be: ${validBOQs.join(', ')})`);
+                if (!record.project) rowErrors.push('Project missing');
+                if (!record.plan || record.plan <= 0) rowErrors.push('Plan must be positive');
+                if (record.actual < 0) rowErrors.push('Actual cannot be negative');
+                if (!record.manpower || record.manpower <= 0) rowErrors.push('Manpower must be positive');
+                
+                if (rowErrors.length > 0) {
+                    errors.push({ row: rowNum, errors: rowErrors, data: record });
+                } else {
+                    // Check for duplicates in existing data
+                    const key = `${record.date}_${record.line}_${record.boq}`;
+                    record.key = key;
+                    record.efficiency = record.plan > 0 ? Math.round((record.actual / record.plan) * 100) : 0;
+                    validRecords.push(record);
+                }
+            });
+            
+            // Check for duplicates against Firebase
+            checkDuplicatesAndShowPreview(validRecords, errors);
+        }
+
+        function checkDuplicatesAndShowPreview(validRecords, errors) {
+            const duplicateChecks = validRecords.map(record => {
+                return db.ref(`daily_reports/${record.date}/line${record.line}_${record.boq.toLowerCase()}`).once('value');
+            });
+            
+            Promise.all(duplicateChecks).then(snapshots => {
+                const duplicates = [];
+                const newRecords = [];
+                
+                validRecords.forEach((record, index) => {
+                    if (snapshots[index].exists()) {
+                        duplicates.push(record);
+                    } else {
+                        newRecords.push(record);
+                    }
+                });
+                
+                showImportPreview(newRecords, duplicates, errors);
+            });
+        }
+
+        function showImportPreview(newRecords, duplicates, errors) {
+            pendingImportData = { newRecords, duplicates, errors };
+            
+            // Summary
+            const summary = document.getElementById('importSummary');
+            summary.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 32px; font-weight: bold; color: #4caf50;">${newRecords.length}</div>
+                        <div style="color: #666;">New Records</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 32px; font-weight: bold; color: #ff9800;">${duplicates.length}</div>
+                        <div style="color: #666;">Duplicates</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 32px; font-weight: bold; color: #f44336;">${errors.length}</div>
+                        <div style="color: #666;">Errors</div>
+                    </div>
+                </div>
+            `;
+            
+            // Errors
+            if (errors.length > 0) {
+                document.getElementById('importErrors').style.display = 'block';
+                document.getElementById('errorList').innerHTML = errors.map(err => 
+                    `<div style="margin-bottom: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <strong>Row ${err.row}:</strong> ${err.errors.join(', ')}
+                    </div>`
+                ).join('');
+            } else {
+                document.getElementById('importErrors').style.display = 'none';
+            }
+            
+            // Duplicates
+            if (duplicates.length > 0) {
+                document.getElementById('importDuplicates').style.display = 'block';
+                document.getElementById('duplicateList').innerHTML = duplicates.map(dup => 
+                    `<div style="margin-bottom: 4px; font-size: 13px;">
+                        ${dup.date} • Line ${dup.line} • ${dup.boq}
+                    </div>`
+                ).slice(0, 10).join('') + (duplicates.length > 10 ? `<div style="margin-top: 8px; color: #666;">...and ${duplicates.length - 10} more</div>` : '');
+            } else {
+                document.getElementById('importDuplicates').style.display = 'none';
+            }
+            
+            // Preview table
+            const allRecords = [...newRecords, ...duplicates];
+            const tbody = document.getElementById('previewTableBody');
+            tbody.innerHTML = allRecords.map(record => {
+                const isDuplicate = duplicates.includes(record);
+                const bgColor = isDuplicate ? '#fff3e0' : 'white';
+                return `
+                    <tr style="background: ${bgColor};">
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;">${record.date}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;">Line ${record.line}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;">${record.boq}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;">${record.project}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${record.plan}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${record.actual}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+                            ${isDuplicate ? '<span style="color: #ff9800;">Duplicate</span>' : '<span style="color: #4caf50;">New</span>'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // Enable/disable import button
+            const importBtn = document.getElementById('importConfirmBtn');
+            if (newRecords.length === 0 && duplicates.length === 0) {
+                importBtn.disabled = true;
+                importBtn.style.opacity = '0.5';
+                importBtn.style.cursor = 'not-allowed';
+            } else {
+                importBtn.disabled = false;
+                importBtn.style.opacity = '1';
+                importBtn.style.cursor = 'pointer';
+            }
+            
+            document.getElementById('excelImportModal').classList.add('active');
+        }
+
+        function closeExcelImportModal() {
+            document.getElementById('excelImportModal').classList.remove('active');
+            pendingImportData = [];
+        }
+
+        function confirmBulkImport() {
+            const { newRecords, duplicates, errors } = pendingImportData;
+            
+            if (!newRecords && !duplicates) {
+                alert('No data to import');
+                return;
+            }
+            
+            const duplicateHandling = document.getElementById('duplicateHandling').value;
+            let recordsToImport = [...newRecords];
+            
+            if (duplicates.length > 0) {
+                if (duplicateHandling === 'overwrite') {
+                    recordsToImport = [...newRecords, ...duplicates];
+                } else {
+                    // Skip duplicates - already filtered out
+                }
+            }
+            
+            if (recordsToImport.length === 0) {
+                alert('No records to import (all are duplicates and set to skip)');
+                return;
+            }
+            
+            if (!confirm(`Import ${recordsToImport.length} records?\n\n${newRecords.length} new + ${duplicateHandling === 'overwrite' ? duplicates.length + ' overwrite' : '0 (skipped duplicates)'}`)) {
+                return;
+            }
+            
+            // Import records
+            const promises = recordsToImport.map(record => {
+                const reportKey = `line${record.line}_${record.boq.toLowerCase()}`;
+                const dailyReport = {
+                    date: record.date,
+                    line: record.line,
+                    lineName: `Line ${record.line}`,
+                    boq: record.boq,
+                    project: record.project,
+                    typology: record.typology || '',
+                    plan: record.plan,
+                    actual: record.actual,
+                    efficiency: record.efficiency,
+                    manpower: record.manpower,
+                    downtimeMinutes: record.downtimeMinutes,
+                    savedAt: Date.now()
+                };
+                
+                return db.ref(`daily_reports/${record.date}/${reportKey}`).set(dailyReport);
+            });
+            
+            Promise.all(promises).then(() => {
+                alert(`✅ Successfully imported ${recordsToImport.length} records!`);
+                closeExcelImportModal();
+                loadDailyRecords(); // Refresh table
+            }).catch(err => {
+                console.error('Import error:', err);
+                alert('❌ Error importing some records. Check console for details.');
+            });
+        }
+
+        // ══════════════════════════════════════════════════
+        // ── CAROUSEL CONTENT MANAGEMENT ───────────────────
+        // ══════════════════════════════════════════════════
+        
+        let selectedCarouselKey = '';
+        let currentCarouselItems = [];
+        
+        function initCarouselManagement() {
+            // Populate line dropdown
+            db.ref('settings/lines').once('value', (snapshot) => {
+                const select = document.getElementById('carouselLineSelect');
+                select.innerHTML = '<option value="">Select Line</option>';
+                
+                snapshot.forEach((child) => {
+                    const option = document.createElement('option');
+                    option.value = child.val();
+                    option.textContent = `Line ${child.val()}`;
+                    select.appendChild(option);
+                });
+            });
+            
+            // Populate copy-from dropdown
+            loadCopyFromOptions();
+        }
+        
+        function loadCarouselManagement() {
+            const line = document.getElementById('carouselLineSelect').value;
+            const boq = document.getElementById('carouselBoqSelect').value;
+            
+            if (!line || !boq) {
+                document.getElementById('carouselContentLibrary').style.display = 'none';
+                return;
+            }
+            
+            selectedCarouselKey = `line${line}_${boq.toLowerCase()}`;
+            document.getElementById('carouselContentLibrary').style.display = 'block';
+            
+            // Load settings
+            db.ref(`carousel_content/${selectedCarouselKey}/settings`).once('value', (snapshot) => {
+                const settings = snapshot.val() || { idleTimeout: 45, enabled: true };
+                document.getElementById('carouselIdleTimeout').value = settings.idleTimeout || 45;
+                document.getElementById('carouselEnabled').checked = settings.enabled !== false;
+            });
+            
+            // Load items
+            loadCarouselItems();
+        }
+        
+        function loadCarouselItems() {
+            db.ref(`carousel_content/${selectedCarouselKey}/items`).once('value', (snapshot) => {
+                const items = [];
+                snapshot.forEach((child) => {
+                    items.push({
+                        id: child.key,
+                        ...child.val()
+                    });
+                });
+                
+                currentCarouselItems = items.sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+                displayCarouselItems();
+            });
+        }
+        
+        function displayCarouselItems() {
+            const container = document.getElementById('carouselItemsList');
+            const countSpan = document.getElementById('carouselItemCount');
+            const addBtn = document.getElementById('btnAddCarouselItem');
+            
+            const itemCount = currentCarouselItems.length;
+            countSpan.textContent = `(${itemCount} / 5)`;
+            
+            // Disable add button if at max
+            if (itemCount >= 5) {
+                addBtn.disabled = true;
+                addBtn.style.opacity = '0.5';
+                addBtn.style.cursor = 'not-allowed';
+            } else {
+                addBtn.disabled = false;
+                addBtn.style.opacity = '1';
+                addBtn.style.cursor = 'pointer';
+            }
+            
+            if (itemCount === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">No content items yet. Click "Add Content" to upload.</p>';
+                return;
+            }
+            
+            container.innerHTML = currentCarouselItems.map((item, index) => {
+                const typeIcon = item.type === 'image' ? '🖼️' : '🎥';
+                const fileName = item.url.split('/').pop().split('?')[0];
+                
+                return `
+                    <div style="padding: 16px; background: #f5f7fa; border-radius: 8px; border: 2px solid #ddd;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                            <div style="flex: 1;">
+                                <div style="font-size: 16px; font-weight: bold; margin-bottom: 4px;">
+                                    ${typeIcon} ${item.type === 'image' ? 'Image' : 'Video'} #${index + 1}
+                                </div>
+                                <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                                    Sequence: ${item.sequence} | Duration: ${item.duration}s
+                                </div>
+                                <div style="font-size: 11px; color: #999; word-break: break-all;">
+                                    ${fileName}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="previewCarouselItem('${item.id}')" style="padding: 8px 16px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                    👁️ Preview
+                                </button>
+                                <button onclick="deleteCarouselItem('${item.id}')" style="padding: 8px 16px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                    🗑️ Delete
+                                </button>
+                            </div>
+                        </div>
+                        ${item.type === 'image' ? 
+                            `<img src="${item.url}" style="width: 100%; max-height: 200px; object-fit: contain; border-radius: 4px; background: white;">` :
+                            `<video src="${item.url}" style="width: 100%; max-height: 200px; border-radius: 4px; background: black;" controls></video>`
+                        }
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function showAddCarouselItemModal() {
+            if (currentCarouselItems.length >= 5) {
+                alert('❌ Maximum 5 content items allowed per line/BOQ');
+                return;
+            }
+            
+            // Set next sequence number
+            const nextSeq = currentCarouselItems.length > 0 ? 
+                Math.max(...currentCarouselItems.map(i => i.sequence || 0)) + 1 : 1;
+            document.getElementById('carouselItemSequence').value = nextSeq;
+            
+            // Reset form
+            document.getElementById('carouselFileInput').value = '';
+            document.getElementById('carouselItemDuration').value = 60;
+            document.getElementById('carouselUploadProgress').style.display = 'none';
+            
+            document.getElementById('addCarouselItemModal').classList.add('active');
+        }
+        
+        function closeAddCarouselItemModal() {
+            document.getElementById('addCarouselItemModal').classList.remove('active');
+        }
+        
+        function uploadCarouselItem() {
+            const fileInput = document.getElementById('carouselFileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+            
+            // Validate file size (50 MB)
+            if (file.size > 50 * 1024 * 1024) {
+                alert('❌ File too large! Maximum size is 50 MB');
+                return;
+            }
+            
+            // Validate file type
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'video/mp4', 'video/quicktime'];
+            if (!validTypes.includes(file.type)) {
+                alert('❌ Invalid file type! Please upload JPG, PNG, GIF, MP4, or MOV');
+                return;
+            }
+            
+            const duration = parseInt(document.getElementById('carouselItemDuration').value);
+            const sequence = parseInt(document.getElementById('carouselItemSequence').value);
+            
+            // Show progress
+            document.getElementById('carouselUploadProgress').style.display = 'block';
+            document.getElementById('carouselUploadStatus').textContent = 'Uploading...';
+            
+            // Upload to Firebase Storage
+            const storage = firebase.storage();
+            const storageRef = storage.ref();
+            const fileName = `carousel/${selectedCarouselKey}/${Date.now()}_${file.name}`;
+            const fileRef = storageRef.child(fileName);
+            
+            const uploadTask = fileRef.put(file);
+            
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    // Progress
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    document.getElementById('carouselUploadProgressBar').style.width = progress + '%';
+                    document.getElementById('carouselUploadStatus').textContent = `Uploading... ${Math.round(progress)}%`;
+                },
+                (error) => {
+                    // Error
+                    console.error('Upload error:', error);
+                    alert('❌ Upload failed: ' + error.message);
+                    document.getElementById('carouselUploadProgress').style.display = 'none';
+                },
+                () => {
+                    // Success
+                    uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
+                        // Save to database
+                        const itemData = {
+                            type: file.type.startsWith('image/') ? 'image' : 'video',
+                            url: downloadURL,
+                            duration: duration,
+                            sequence: sequence,
+                            fileName: file.name,
+                            uploadedAt: Date.now()
+                        };
+                        
+                        db.ref(`carousel_content/${selectedCarouselKey}/items`).push(itemData).then(() => {
+                            alert('✅ Content uploaded successfully!');
+                            closeAddCarouselItemModal();
+                            loadCarouselItems();
+                        });
+                    });
+                }
+            );
+        }
+        
+        function deleteCarouselItem(itemId) {
+            if (!confirm('Delete this content item?')) return;
+            
+            db.ref(`carousel_content/${selectedCarouselKey}/items/${itemId}`).once('value', (snapshot) => {
+                const item = snapshot.val();
+                
+                // Delete from storage
+                if (item && item.url) {
+                    const storage = firebase.storage();
+                    const fileRef = storage.refFromURL(item.url);
+                    fileRef.delete().catch(e => console.error('Storage delete error:', e));
+                }
+                
+                // Delete from database
+                db.ref(`carousel_content/${selectedCarouselKey}/items/${itemId}`).remove().then(() => {
+                    alert('✅ Content deleted');
+                    loadCarouselItems();
+                });
+            });
+        }
+        
+        function previewCarouselItem(itemId) {
+            const item = currentCarouselItems.find(i => i.id === itemId);
+            if (!item) return;
+            
+            const previewWindow = window.open('', 'Preview', 'width=800,height=600');
+            previewWindow.document.write(`
+                <html>
+                <head><title>Preview</title></head>
+                <body style="margin:0; display:flex; align-items:center; justify-content:center; background:#000;">
+                    ${item.type === 'image' ?
+                        `<img src="${item.url}" style="max-width:100%; max-height:100%;">` :
+                        `<video src="${item.url}" controls autoplay style="max-width:100%; max-height:100%;"></video>`
+                    }
+                </body>
+                </html>
+            `);
+        }
+        
+        function saveCarouselSettings() {
+            const settings = {
+                idleTimeout: parseInt(document.getElementById('carouselIdleTimeout').value),
+                enabled: document.getElementById('carouselEnabled').checked,
+                updatedAt: Date.now()
+            };
+            
+            db.ref(`carousel_content/${selectedCarouselKey}/settings`).set(settings).then(() => {
+                alert('✅ Settings saved');
+            });
+        }
+        
+        function loadCopyFromOptions() {
+            db.ref('carousel_content').once('value', (snapshot) => {
+                const select = document.getElementById('copyFromLineSelect');
+                select.innerHTML = '<option value="">Select source line/BOQ</option>';
+                
+                snapshot.forEach((child) => {
+                    const key = child.key;
+                    const itemsCount = child.child('items').numChildren();
+                    if (itemsCount > 0) {
+                        const option = document.createElement('option');
+                        option.value = key;
+                        option.textContent = `${key.replace('_', ' - ').toUpperCase()} (${itemsCount} items)`;
+                        select.appendChild(option);
+                    }
+                });
+            });
+        }
+        
+        function copyCarouselContent() {
+            const sourceKey = document.getElementById('copyFromLineSelect').value;
+            if (!sourceKey) {
+                alert('Please select a source line/BOQ');
+                return;
+            }
+            
+            if (!selectedCarouselKey) {
+                alert('Please select a target line/BOQ first');
+                return;
+            }
+            
+            if (sourceKey === selectedCarouselKey) {
+                alert('❌ Cannot copy to the same line/BOQ');
+                return;
+            }
+            
+            if (!confirm(`Copy all content from ${sourceKey} to ${selectedCarouselKey}?\n\nThis will replace existing content.`)) {
+                return;
+            }
+            
+            // Copy items
+            db.ref(`carousel_content/${sourceKey}/items`).once('value', (snapshot) => {
+                const items = snapshot.val();
+                if (items) {
+                    db.ref(`carousel_content/${selectedCarouselKey}/items`).set(items).then(() => {
+                        alert('✅ Content copied successfully!');
+                        loadCarouselItems();
+                    });
+                } else {
+                    alert('No content to copy');
+                }
             });
         }
 
@@ -4225,6 +5663,20 @@
             // Check for shift end every 60 seconds
             shiftEndCheckInterval = setInterval(checkShiftEnd, 60000);
             checkShiftEnd(); // Initial check
+            
+            // ── NEW: Initialize cycle time tracking ──────
+            currentCycleStartTime = Date.now();
+            cycleProgressInterval = setInterval(updateCycleProgress, 1000);
+            updateCycleProgress(); // Initial update
+            
+            // ── NEW: Update top bar displays ──────
+            updateTopBarDisplays();
+            
+            // ── NEW: Load carousel content ──────
+            loadCarouselContent();
+            
+            // ── NEW: Start idle detection ──────
+            startIdleDetection();
         }
 
         function updateTimers() {
@@ -4252,6 +5704,246 @@
             // Update hourly data in real-time
             updateHourlyDataRealtime();
         }
+
+        // ══════════════════════════════════════════════════
+        // ── CYCLE TIME PROGRESS & EXPECTED COUNTER ────────
+        // ══════════════════════════════════════════════════
+        
+        function updateCycleProgress() {
+            const now = Date.now();
+            const cycleElapsed = now - currentCycleStartTime;
+            const cycleDuration = cycleTimeSeconds * 1000;
+            
+            // Calculate progress (0 to 100%)
+            let progressPercent = (cycleElapsed / cycleDuration) * 100;
+            
+            // Check if cycle completed
+            if (progressPercent >= 100) {
+                // Cycle completed - increment expected
+                expectedCount++;
+                currentCycleStartTime = now; // Reset cycle
+                progressPercent = 0;
+                
+                // Update expected display
+                document.getElementById('displayExpected').textContent = expectedCount;
+            }
+            
+            // Update progress bar (depletes from 100% to 0%)
+            const barWidth = Math.max(0, 100 - progressPercent);
+            const progressBar = document.getElementById('cycleProgressBar');
+            progressBar.style.width = barWidth + '%';
+            
+            // Dynamic color based on progress
+            progressBar.classList.remove('warning', 'danger');
+            if (barWidth < 30) {
+                progressBar.classList.add('danger');
+            } else if (barWidth < 60) {
+                progressBar.classList.add('warning');
+            }
+            
+            // Calculate time remaining
+            const timeRemaining = Math.max(0, cycleDuration - cycleElapsed);
+            const minutesRemaining = Math.floor(timeRemaining / 60000);
+            const secondsRemaining = Math.floor((timeRemaining % 60000) / 1000);
+            
+            // Update time text
+            document.getElementById('cycleTimeText').textContent = 
+                `${minutesRemaining}:${String(secondsRemaining).padStart(2, '0')} remaining`;
+        }
+        
+        function updateTopBarDisplays() {
+            // Update all top bar displays
+            if (sessionData) {
+                document.getElementById('displayLineCompact').textContent = `Line ${sessionData.line}`;
+                document.getElementById('displayProjectCompact').textContent = `${sessionData.project} (${sessionData.boq})`;
+                document.getElementById('displayPlanCompact').textContent = sessionData.plan;
+                document.getElementById('displayActualCompact').textContent = actualCount;
+                
+                // Calculate efficiency
+                const efficiency = sessionData.plan > 0 ? Math.round((actualCount / sessionData.plan) * 100) : 0;
+                document.getElementById('displayEfficiencyCompact').textContent = efficiency + '%';
+                
+                // Update expected
+                document.getElementById('displayExpected').textContent = expectedCount;
+            }
+        }
+        
+        // ══════════════════════════════════════════════════
+        // ── CONTENT CAROUSEL SYSTEM ───────────────────────
+        // ══════════════════════════════════════════════════
+        
+        function loadCarouselContent() {
+            if (!sessionData) return;
+            
+            const carouselKey = `line${sessionData.line}_${sessionData.boq.toLowerCase()}`;
+            
+            db.ref(`carousel_content/${carouselKey}/items`).once('value', (snapshot) => {
+                const items = [];
+                snapshot.forEach((child) => {
+                    items.push({
+                        id: child.key,
+                        ...child.val()
+                    });
+                });
+                
+                // Sort by sequence
+                carouselItems = items.sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+                console.log(`Loaded ${carouselItems.length} carousel items for ${carouselKey}`);
+            });
+            
+            // Load settings
+            db.ref(`carousel_content/${carouselKey}/settings`).once('value', (snapshot) => {
+                const settings = snapshot.val();
+                if (settings) {
+                    idleTimeout = settings.idleTimeout || 45;
+                }
+            });
+        }
+        
+        function startIdleDetection() {
+            lastActivityTime = Date.now();
+            
+            // Check idle every second
+            idleTimer = setInterval(() => {
+                const idleSeconds = Math.floor((Date.now() - lastActivityTime) / 1000);
+                
+                if (idleSeconds >= idleTimeout && !carouselActive && carouselItems.length > 0) {
+                    startCarousel();
+                }
+            }, 1000);
+        }
+        
+        function resetIdleTimer() {
+            lastActivityTime = Date.now();
+        }
+        
+        function startCarousel() {
+            if (carouselItems.length === 0) return;
+            
+            carouselActive = true;
+            currentCarouselIndex = 0;
+            
+            // Fade out PMS dashboard
+            const pmsDashboard = document.getElementById('pmsDashboardView');
+            const carouselView = document.getElementById('contentCarouselView');
+            
+            pmsDashboard.classList.add('fade-out');
+            
+            setTimeout(() => {
+                pmsDashboard.classList.add('hidden');
+                pmsDashboard.classList.remove('fade-out');
+                
+                carouselView.classList.remove('hidden');
+                carouselView.classList.add('fade-in');
+                
+                // Play first item
+                playCarouselItem(0);
+            }, 500);
+        }
+        
+        function playCarouselItem(index) {
+            if (index >= carouselItems.length) {
+                index = 0; // Loop back
+            }
+            
+            const item = carouselItems[index];
+            const container = document.getElementById('carouselContent');
+            const indicator = document.getElementById('carouselIndicator');
+            
+            // Clear previous content
+            container.innerHTML = '';
+            
+            // Display based on type
+            if (item.type === 'image') {
+                const img = document.createElement('img');
+                img.src = item.url;
+                img.alt = item.title || 'Content';
+                container.appendChild(img);
+            } else if (item.type === 'video') {
+                const video = document.createElement('video');
+                video.src = item.url;
+                video.autoplay = true;
+                video.muted = true; // Auto-play requires muted
+                video.loop = false;
+                container.appendChild(video);
+            }
+            
+            // Update indicator
+            const itemNum = index + 1;
+            const totalItems = carouselItems.length;
+            indicator.textContent = `Item ${itemNum} of ${totalItems} | Press any key to return`;
+            
+            // Schedule next item
+            const duration = (item.duration || 60) * 1000;
+            carouselPlayInterval = setTimeout(() => {
+                currentCarouselIndex = index + 1;
+                playCarouselItem(currentCarouselIndex);
+            }, duration);
+        }
+        
+        function stopCarousel() {
+            if (!carouselActive) return;
+            
+            carouselActive = false;
+            
+            // Clear any scheduled playback
+            if (carouselPlayInterval) {
+                clearTimeout(carouselPlayInterval);
+                carouselPlayInterval = null;
+            }
+            
+            // Fade back to PMS dashboard
+            const pmsDashboard = document.getElementById('pmsDashboardView');
+            const carouselView = document.getElementById('contentCarouselView');
+            
+            carouselView.classList.add('fade-out');
+            
+            setTimeout(() => {
+                carouselView.classList.add('hidden');
+                carouselView.classList.remove('fade-out');
+                
+                pmsDashboard.classList.remove('hidden');
+                pmsDashboard.classList.add('fade-in');
+                
+                setTimeout(() => {
+                    pmsDashboard.classList.remove('fade-in');
+                }, 500);
+            }, 500);
+            
+            // Reset idle timer
+            resetIdleTimer();
+        }
+        
+        // ══════════════════════════════════════════════════
+        // ── KEYBOARD INTERRUPT HANDLING ───────────────────
+        // ══════════════════════════════════════════════════
+        
+        // Add global keyboard listener
+        document.addEventListener('keydown', function(e) {
+            // Reset idle timer on ANY key press
+            resetIdleTimer();
+            
+            // If carousel is active, stop it and handle key
+            if (carouselActive) {
+                stopCarousel();
+                
+                // Still execute the key function
+                if (e.key === ' ' || e.code === 'Space') {
+                    e.preventDefault();
+                    incrementActual();
+                } else if (e.key === 'Backspace') {
+                    e.preventDefault();
+                    decrementActual();
+                } else if (e.key === 'd' || e.key === 'D') {
+                    e.preventDefault();
+                    toggleDowntime();
+                }
+                
+                return;
+            }
+            
+            // Normal key handling (existing code continues...)
+        });
 
         function updateHourlyDataRealtime() {
             const now = new Date();
@@ -5223,6 +6915,17 @@
                 e.preventDefault();
                 actualCount++;
                 document.getElementById('actualValue').textContent = actualCount;
+                
+                // Update top bar
+                document.getElementById('displayActualCompact').textContent = actualCount;
+                const efficiency = sessionData.plan > 0 ? Math.round((actualCount / sessionData.plan) * 100) : 0;
+                document.getElementById('displayEfficiencyCompact').textContent = efficiency + '%';
+                
+                // Add celebration animation
+                const actualDisplay = document.getElementById('displayActualCompact');
+                actualDisplay.classList.add('celebration');
+                setTimeout(() => actualDisplay.classList.remove('celebration'), 600);
+                
                 updateHourlyDataRealtime();
                 updateEfficiency();
                 updateVariance();
@@ -5232,6 +6935,12 @@
                 if (actualCount > 0) {
                     actualCount--;
                     document.getElementById('actualValue').textContent = actualCount;
+                    
+                    // Update top bar
+                    document.getElementById('displayActualCompact').textContent = actualCount;
+                    const efficiency = sessionData.plan > 0 ? Math.round((actualCount / sessionData.plan) * 100) : 0;
+                    document.getElementById('displayEfficiencyCompact').textContent = efficiency + '%';
+                    
                     updateHourlyDataRealtime();
                     updateEfficiency();
                     updateVariance();
