@@ -29,7 +29,7 @@
     </script>
     <style>
         /* ═══════════════════════════════════════════════════════════
-           SOBHA MODULAR - PREMIUM PRODUCTION MONITORING SYSTEM
+           SOBHA REALTY - PREMIUM PRODUCTION MONITORING SYSTEM
            Luxury Design | Craftsmanship | Attention to Detail
         ═══════════════════════════════════════════════════════════ */
         
@@ -1737,7 +1737,7 @@
 
         <!-- Dashboard Screen -->
         <div class="dashboard-screen hidden" id="dashboardScreen">
-            <div class="dashboard-header">
+            <div class="dashboard-header" id="dashboardHeaderOld">
                 <h1>📊 Management Dashboard</h1>
                 <div style="display: flex; gap: 10px;">
                     <button class="btn-refresh" onclick="refreshDashboard()">🔄 Refresh Data</button>
@@ -4774,6 +4774,11 @@
             // Show tabs in View mode
             if (isViewMode) {
                 document.getElementById('dashboardTabs').style.display = 'block';
+                // Hide old dashboard header to avoid duplicate
+                const oldHeader = document.getElementById('dashboardHeaderOld');
+                if (oldHeader) {
+                    oldHeader.style.display = 'none';
+                }
             }
 
             // Hide Back to Monitor button in View mode
@@ -4829,15 +4834,25 @@
                 dashboardContent.style.display = 'none';
             }
 
-            // Create session selector UI
-            // Check if selector already exists
+            // Create session selector UI with new design
             if (!document.getElementById('sessionSelectorContainer')) {
                 console.log('Creating session selector container');
                 const selectorHTML = `
-                    <div id="sessionSelectorContainer" style="max-width: 1000px; margin: 40px auto; padding: 20px; position: relative; z-index: 10; background: #f5f7fa; border-radius: 16px;">
-                        <h2 style="text-align: center; margin-bottom: 30px; color: #333;">📊 Active Production Lines</h2>
-                        <div id="sessionList" style="display: grid; gap: 20px;"></div>
-                        <p id="noSessionsMsg" style="text-align: center; color: #888; display: none; margin-top: 40px;">
+                    <div id="sessionSelectorContainer" style="padding: 30px; position: relative; z-index: 10;">
+                        <!-- MANAGEMENT DASHBOARD HEADING AT TOP -->
+                        <div style="text-align: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 3px solid #d4af37;">
+                            <h1 style="font-size: 42px; font-weight: 700; color: #1a1a2e; margin: 0; text-transform: uppercase; letter-spacing: 2px;">
+                                📊 MANAGEMENT DASHBOARD
+                            </h1>
+                            <p style="color: #708090; font-size: 16px; margin-top: 10px;">Active Production Lines - Real-Time Monitoring</p>
+                        </div>
+                        
+                        <h2 style="text-align: center; margin-bottom: 30px; color: #333; font-size: 28px;">Active Production Lines</h2>
+                        
+                        <!-- SQUARE CARDS IN ONE ROW -->
+                        <div id="sessionList" style="display: flex; gap: 24px; overflow-x: auto; padding: 20px; justify-content: flex-start; flex-wrap: wrap;"></div>
+                        
+                        <p id="noSessionsMsg" style="text-align: center; color: #888; display: none; margin-top: 40px; font-size: 18px;">
                             No active production sessions found. Start monitoring on the shop floor first.
                         </p>
                     </div>
@@ -4882,7 +4897,7 @@
                 console.log('Found', Object.keys(sessions).length, 'sessions');
                 noSessionsMsg.style.display = 'none';
 
-                // Display each active session as a card
+                // Display each active session as a SQUARE CARD
                 Object.entries(sessions).forEach(([sessionId, data]) => {
                     console.log('Processing session:', sessionId, data);
                     console.log('Session status:', data.status);
@@ -4892,45 +4907,100 @@
                         return;
                     }
 
-                    const efficiency = data.plan > 0 ? Math.round((data.actualCount / data.plan) * 100) : 0;
+                    // FIX: Use actualCount (Firebase field name) instead of actual
+                    const actualCount = data.actualCount || data.actual || 0;
+                    const efficiency = data.plan > 0 ? Math.round((actualCount / data.plan) * 100) : 0;
+                    const expected = data.expected || 0;
+                    const plan = data.plan || 0;
+                    const manpower = `${data.present || 0}/${data.totalManpower || 0}`;
                     const startDate = new Date(data.startTime).toLocaleDateString();
-                    const startTime = new Date(data.startTime).toLocaleTimeString();
+                    const startTime = new Date(data.startTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                    
+                    // Check if downtime is active
+                    const hasDowntime = data.downtimeActive || false;
+                    
+                    // Efficiency-based background color (light shades)
+                    let bgColor = '#fff8f8'; // Light red for low efficiency
+                    let borderColor = '#f44336'; // Red border
+                    if (efficiency >= 80) {
+                        bgColor = '#f8fff8'; // Light green
+                        borderColor = '#4caf50'; // Green border
+                    } else if (efficiency >= 60) {
+                        bgColor = '#fffef8'; // Light yellow
+                        borderColor = '#ff9800'; // Orange border
+                    }
 
                     const card = document.createElement('div');
                     card.style.cssText = `
-                        padding: 24px;
-                        background: white;
-                        border: 2px solid #e0e0e0;
-                        border-radius: 12px;
+                        width: 280px;
+                        height: 300px;
+                        padding: 20px;
+                        background: ${bgColor};
+                        border: 3px solid ${borderColor};
+                        border-radius: 16px;
                         cursor: pointer;
                         transition: all 0.3s ease;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: space-between;
+                        position: relative;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
                     `;
-                    card.onmouseover = () => { card.style.borderColor = '#667eea'; card.style.boxShadow = '0 4px 12px rgba(102,126,234,0.2)'; };
-                    card.onmouseout = () => { card.style.borderColor = '#e0e0e0'; card.style.boxShadow = 'none'; };
+                    card.onmouseover = () => { 
+                        card.style.transform = 'translateY(-4px)'; 
+                        card.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)'; 
+                    };
+                    card.onmouseout = () => { 
+                        card.style.transform = 'translateY(0)'; 
+                        card.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; 
+                    };
                     
                     card.innerHTML = `
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div style="flex: 1;">
-                                <h3 style="margin: 0 0 8px 0; font-size: 20px; color: #333;">
-                                    🏭 Line ${data.line || 'Unknown'}
-                                </h3>
-                                <p style="margin: 0 0 4px 0; color: #666; font-size: 14px;">
-                                    <strong>Project:</strong> ${data.project || 'N/A'} | <strong>BOQ:</strong> ${data.boq || 'N/A'}
-                                </p>
-                                <p style="margin: 0; color: #888; font-size: 13px;">
-                                    <strong>Typology:</strong> ${data.typology || 'N/A'}
-                                </p>
-                                <p style="margin: 4px 0 0 0; color: #999; font-size: 12px;">
-                                    📅 ${startDate} • ⏰ ${startTime}
-                                </p>
+                        <!-- Downtime Indicator -->
+                        ${hasDowntime ? `<div style="position: absolute; top: 10px; right: 10px; background: #f44336; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 700; animation: pulse 1.5s infinite;">⏸ DOWNTIME</div>` : ''}
+                        
+                        <!-- Line Number -->
+                        <div style="text-align: center;">
+                            <h3 style="margin: 0; font-size: 28px; font-weight: 700; color: #1a1a2e;">
+                                🏭 LINE ${data.line || '?'}
+                            </h3>
+                            <p style="margin: 4px 0 0 0; color: #708090; font-size: 13px; font-weight: 600;">
+                                ${data.project || 'N/A'} • ${data.boq || 'N/A'}
+                            </p>
+                        </div>
+                        
+                        <!-- Efficiency Circle -->
+                        <div style="text-align: center; margin: 8px 0;">
+                            <div style="font-size: 52px; font-weight: 700; color: ${borderColor}; line-height: 1;">
+                                ${efficiency}%
                             </div>
-                            <div style="text-align: right; margin-left: 20px;">
-                                <div style="font-size: 32px; font-weight: 700; color: ${efficiency >= 80 ? '#4caf50' : efficiency >= 60 ? '#ff9800' : '#f44336'};">
-                                    ${efficiency}%
-                                </div>
-                                <div style="font-size: 14px; color: #888;">
-                                    ${data.actualCount || 0}/${data.plan || 0}
-                                </div>
+                            <p style="margin: 4px 0 0 0; font-size: 12px; color: #888; font-weight: 600;">EFFICIENCY</p>
+                        </div>
+                        
+                        <!-- Plan, Expected vs Actual (FIX 3: Added PLAN row) -->
+                        <div style="background: white; padding: 8px; border-radius: 8px; margin: 8px 0;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                <span style="font-size: 11px; color: #666; font-weight: 600;">PLAN</span>
+                                <span style="font-size: 14px; font-weight: 700; color: #1a1a2e;">${plan}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                <span style="font-size: 11px; color: #666; font-weight: 600;">EXPECTED</span>
+                                <span style="font-size: 14px; font-weight: 700; color: #d4af37;">${expected}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="font-size: 11px; color: #666; font-weight: 600;">ACTUAL</span>
+                                <span style="font-size: 14px; font-weight: 700; color: #1a1a2e;">${actualCount}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Bottom Info -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #888;">
+                            <div>
+                                <span style="font-weight: 600;">👥 ${manpower}</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div>${startDate}</div>
+                                <div>⏰ ${startTime}</div>
                             </div>
                         </div>
                     `;
@@ -7416,10 +7486,10 @@
     </script>
     
     <!-- ═══════════════════════════════════════════════════════════
-         SOBHA MODULAR PREMIUM FOOTER
+         SOBHA REALTY PREMIUM FOOTER
     ═══════════════════════════════════════════════════════════ -->
     <div class="sobha-footer">
-        Crafted with Precision | Powered by <span class="brand">SOBHA MODULAR</span> | Excellence in Every Detail
+        Crafted with Precision | Powered by <span class="brand">SOBHA REALTY</span> | Excellence in Every Detail
     </div>
     
 </body>
