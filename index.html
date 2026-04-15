@@ -4909,8 +4909,31 @@
 
                     // FIX: Use actualCount (Firebase field name) instead of actual
                     const actualCount = data.actualCount || data.actual || 0;
-                    const efficiency = data.plan > 0 ? Math.round((actualCount / data.plan) * 100) : 0;
-                    const expected = data.expected || 0;
+                    
+                    // FIX: Calculate expected if not provided - WITH PROPER ERROR HANDLING
+                    let expected = data.expected || 0;
+                    
+                    // Only calculate if we don't have expected from Firebase
+                    if ((expected === 0 || isNaN(expected)) && data.startTime && data.cycleTime) {
+                        try {
+                            const now = Date.now(); // Current timestamp in milliseconds
+                            const startTime = typeof data.startTime === 'number' ? data.startTime : new Date(data.startTime).getTime();
+                            const elapsed = Math.floor((now - startTime) / 1000); // Elapsed seconds
+                            const cycleTime = parseInt(data.cycleTime) || 60; // Default 60 seconds if missing
+                            const cyclesCompleted = Math.floor(elapsed / cycleTime);
+                            expected = Math.max(0, cyclesCompleted); // Never negative
+                        } catch (e) {
+                            console.error('Error calculating expected:', e);
+                            expected = 0; // Fallback to 0 on error
+                        }
+                    }
+                    
+                    // Ensure expected is a valid number
+                    expected = isNaN(expected) ? 0 : expected;
+                    
+                    // FIX: Calculate efficiency as Actual/Expected (NOT Actual/Plan)
+                    // This matches the monitoring screen logic
+                    const efficiency = expected > 0 ? Math.round((actualCount / expected) * 100) : 0;
                     const plan = data.plan || 0;
                     const manpower = `${data.present || 0}/${data.totalManpower || 0}`;
                     const startDate = new Date(data.startTime).toLocaleDateString();
@@ -5854,9 +5877,11 @@
                 }
                 
                 sessionData.actualCount = actualCount;
+                sessionData.expected = expectedCount;  // ADD THIS: Save expected count
                 sessionData.hourlyData = hourlyData;
                 sessionData.downtimeEvents = downtimeEvents;
                 sessionData.totalDowntimeSeconds = totalDowntimeSeconds;
+                sessionData.downtimeActive = downtimeActive;  // ADD THIS: Save downtime status
                 sessionData.lastUpdated = Date.now();
                 
                 // Save to localStorage as backup
@@ -7486,10 +7511,10 @@
     </script>
     
     <!-- ═══════════════════════════════════════════════════════════
-         SOBHA REALTY PREMIUM FOOTER
+         SOBHA MODULAR PREMIUM FOOTER
     ═══════════════════════════════════════════════════════════ -->
     <div class="sobha-footer">
-        Crafted with Precision | Powered by <span class="brand">SOBHA REALTY</span> | Excellence in Every Detail
+        Crafted with Precision | Powered by <span class="brand">SOBHA MODULAR</span> | Excellence in Every Detail
     </div>
     
 </body>
