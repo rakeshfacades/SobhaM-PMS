@@ -29,7 +29,7 @@
     </script>
     <style>
         /* ═══════════════════════════════════════════════════════════
-           SOBHA MODULAR - PREMIUM PRODUCTION MONITORING SYSTEM
+           SOBHA REALTY - PREMIUM PRODUCTION MONITORING SYSTEM
            Luxury Design | Craftsmanship | Attention to Detail
         ═══════════════════════════════════════════════════════════ */
         
@@ -621,6 +621,15 @@
 
         .metric-card.efficiency .metric-value {
             color: var(--sobha-navy);
+        }
+        
+        .metric-card.sqm {
+            background: linear-gradient(135deg, var(--sobha-white) 0%, #e8f5e9 100%);
+            border-color: #4caf50;
+        }
+        
+        .metric-card.sqm .metric-value {
+            color: #2e7d32;
         }
 
         .efficiency-unit {
@@ -1533,6 +1542,11 @@
                         <input type="number" id="plan" required min="1" placeholder="Enter production plan">
                     </div>
                     <div class="form-group">
+                        <label for="sqmPerUnit">SQM per Unit</label>
+                        <input type="number" id="sqmPerUnit" step="0.01" min="0" placeholder="e.g., 2.5 (optional)">
+                        <small style="color: #708090; font-size: 11px;">Enter area in square meters per unit (optional)</small>
+                    </div>
+                    <div class="form-group">
                         <label for="cycleTime">Cycle Time (seconds)</label>
                         <input type="number" id="cycleTime" required min="1" placeholder="Enter cycle time">
                     </div>
@@ -1684,7 +1698,7 @@
                 </div>
             </div>
 
-            <div class="metrics-container">
+            <div class="metrics-container" style="grid-template-columns: repeat(5, 1fr);">
                 <div class="metric-card plan">
                     <div class="metric-label">Plan</div>
                     <div class="metric-value" id="planValue">0</div>
@@ -1702,6 +1716,11 @@
                     <div class="metric-value">
                         <span id="efficiencyValue">0</span><span class="efficiency-unit">%</span>
                     </div>
+                </div>
+                <div class="metric-card sqm">
+                    <div class="metric-label">Total SQM</div>
+                    <div class="metric-value" id="sqmValue">0</div>
+                    <div style="font-size: 14px; color: var(--sobha-slate); margin-top: 8px;">sqm produced</div>
                 </div>
             </div>
 
@@ -4935,6 +4954,8 @@
                     // This matches the monitoring screen logic
                     const efficiency = expected > 0 ? Math.round((actualCount / expected) * 100) : 0;
                     const plan = data.plan || 0;
+                    const sqmPerUnit = data.sqmPerUnit || 0;
+                    const totalSqm = (actualCount * sqmPerUnit).toFixed(2);
                     const manpower = `${data.present || 0}/${data.totalManpower || 0}`;
                     const startDate = new Date(data.startTime).toLocaleDateString();
                     const startTime = new Date(data.startTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
@@ -4956,7 +4977,7 @@
                     const card = document.createElement('div');
                     card.style.cssText = `
                         width: 280px;
-                        height: 300px;
+                        height: ${sqmPerUnit > 0 ? '350px' : '300px'};
                         padding: 20px;
                         background: ${bgColor};
                         border: 3px solid ${borderColor};
@@ -4994,13 +5015,13 @@
                         
                         <!-- Efficiency Circle -->
                         <div style="text-align: center; margin: 8px 0;">
-                            <div style="font-size: 52px; font-weight: 700; color: ${borderColor}; line-height: 1;">
+                            <div style="font-size: 48px; font-weight: 700; color: ${borderColor}; line-height: 1;">
                                 ${efficiency}%
                             </div>
                             <p style="margin: 4px 0 0 0; font-size: 12px; color: #888; font-weight: 600;">EFFICIENCY</p>
                         </div>
                         
-                        <!-- Plan, Expected vs Actual (FIX 3: Added PLAN row) -->
+                        <!-- Plan, Expected vs Actual + SQM -->
                         <div style="background: white; padding: 8px; border-radius: 8px; margin: 8px 0;">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                                 <span style="font-size: 11px; color: #666; font-weight: 600;">PLAN</span>
@@ -5010,10 +5031,16 @@
                                 <span style="font-size: 11px; color: #666; font-weight: 600;">EXPECTED</span>
                                 <span style="font-size: 14px; font-weight: 700; color: #d4af37;">${expected}</span>
                             </div>
-                            <div style="display: flex; justify-content: space-between;">
+                            <div style="display: flex; justify-content: space-between; ${sqmPerUnit > 0 ? 'margin-bottom: 4px;' : ''}">
                                 <span style="font-size: 11px; color: #666; font-weight: 600;">ACTUAL</span>
                                 <span style="font-size: 14px; font-weight: 700; color: #1a1a2e;">${actualCount}</span>
                             </div>
+                            ${sqmPerUnit > 0 ? `
+                            <div style="display: flex; justify-content: space-between; border-top: 1px solid #e8f5e9; padding-top: 6px; margin-top: 6px; background: #f1f8e9; margin: 6px -8px -8px -8px; padding: 8px; border-radius: 0 0 8px 8px;">
+                                <span style="font-size: 12px; color: #2e7d32; font-weight: 700;">📐 TOTAL SQM</span>
+                                <span style="font-size: 16px; font-weight: 700; color: #2e7d32;">${totalSqm}</span>
+                            </div>
+                            ` : ''}
                         </div>
                         
                         <!-- Bottom Info -->
@@ -5032,6 +5059,87 @@
                     sessionList.appendChild(card);
                     console.log('Card added for session:', sessionId);
                 });
+                
+                // ═══════════════════════════════════════════════════════════
+                // CREATE SQM SUMMARY CARD - ALL LINES (ONLY ONE!)
+                // ═══════════════════════════════════════════════════════════
+                
+                // Remove old SQM summary card if exists
+                const oldSqmCard = document.getElementById('sqmSummaryCard');
+                if (oldSqmCard) {
+                    oldSqmCard.remove();
+                }
+                
+                const sqmSummaryCard = document.createElement('div');
+                sqmSummaryCard.id = 'sqmSummaryCard'; // Add ID to find and remove later
+                sqmSummaryCard.style.cssText = `
+                    width: 100%;
+                    max-width: 600px;
+                    margin: 30px auto 0 auto;
+                    padding: 24px;
+                    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+                    border: 4px solid #4caf50;
+                    border-radius: 16px;
+                    box-shadow: 0 8px 24px rgba(76, 175, 80, 0.3);
+                `;
+                
+                let sqmSummaryHTML = `
+                    <h2 style="text-align: center; font-size: 28px; font-weight: 700; color: #2e7d32; margin: 0 0 20px 0; text-transform: uppercase; letter-spacing: 1px;">
+                        📐 TOTAL SQM SUMMARY
+                    </h2>
+                    <div style="background: white; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+                `;
+                
+                let totalSQM = 0;
+                let hasAnySqm = false;
+                
+                Object.entries(sessions).forEach(([sessionId, data]) => {
+                    if (data.status !== 'active') return;
+                    
+                    const actualCount = data.actualCount || data.actual || 0;
+                    const sqmPerUnit = data.sqmPerUnit || 0;
+                    const lineSqm = actualCount * sqmPerUnit;
+                    totalSQM += lineSqm;
+                    
+                    if (sqmPerUnit > 0) {
+                        hasAnySqm = true;
+                        sqmSummaryHTML += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
+                                <div style="flex: 1;">
+                                    <span style="font-weight: 700; color: #1a1a2e; font-size: 16px;">Line ${data.line}</span>
+                                    <span style="color: #708090; font-size: 13px; margin-left: 8px;">${data.boq} • ${data.project}</span>
+                                </div>
+                                <div style="font-weight: 700; color: #2e7d32; font-size: 18px;">
+                                    ${lineSqm.toFixed(2)} sqm
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                sqmSummaryHTML += `
+                    </div>
+                    <div style="background: #2e7d32; padding: 20px; border-radius: 12px; text-align: center;">
+                        <div style="color: #c8e6c9; font-size: 16px; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">
+                            TOTAL PRODUCTION AREA
+                        </div>
+                        <div style="color: white; font-size: 64px; font-weight: 700; line-height: 1;">
+                            ${totalSQM.toFixed(2)}
+                        </div>
+                        <div style="color: #c8e6c9; font-size: 20px; font-weight: 600; margin-top: 8px;">
+                            Square Meters
+                        </div>
+                    </div>
+                `;
+                
+                sqmSummaryCard.innerHTML = sqmSummaryHTML;
+                
+                // Only add card if at least one line has SQM data
+                if (hasAnySqm) {
+                    const sessionListContainer = document.getElementById('sessionList');
+                    sessionListContainer.parentElement.insertBefore(sqmSummaryCard, sessionListContainer.nextSibling);
+                }
+                
             }, (error) => {
                 console.error('Firebase error:', error);
                 console.error('Error code:', error.code);
@@ -5438,6 +5546,7 @@
             typology: '',
             line: '',
             plan: 0,
+            sqmPerUnit: 0,
             cycleTime: 0,
             shiftStart: '',
             shiftEnd: '',
@@ -5556,6 +5665,7 @@
             
             // Get form values
             planTarget = parseInt(document.getElementById('plan').value);
+            const sqmPerUnit = parseFloat(document.getElementById('sqmPerUnit').value) || 0;
             const project = getFieldValue('project');
             const boq = document.getElementById('boq').value;
             const typology = getFieldValue('typology');
@@ -5600,6 +5710,7 @@
                 typology: typology,
                 line: line,
                 plan: planTarget,
+                sqmPerUnit: sqmPerUnit,
                 cycleTime: cycleTimeSeconds,
                 shiftStart: shiftStartInput,
                 shiftEnd: shiftEndInput,
@@ -5630,6 +5741,7 @@
             document.getElementById('efficiencyValue').textContent = 0;
             document.getElementById('varianceValue').textContent = 0;
             document.getElementById('totalDowntimeValue').textContent = '00:00';
+            updateSQM();
             
             // Initialize arrays
             hourlyData = [];
@@ -6197,6 +6309,7 @@
             
             // Update efficiency and other metrics
             updateEfficiency();
+            updateSQM();
             updateVariance();
             
             // Update hourly data in real-time
@@ -6555,6 +6668,13 @@
                 document.getElementById('efficiencyValue').textContent = 0;
             }
         }
+        
+        function updateSQM() {
+            const actual = actualCount;
+            const sqmPerUnit = sessionData.sqmPerUnit || 0;
+            const totalSqm = (actual * sqmPerUnit).toFixed(2);
+            document.getElementById('sqmValue').textContent = totalSqm;
+        }
 
         function updateVariance() {
             const expected = parseInt(document.getElementById('expectedValue').textContent);
@@ -6668,6 +6788,7 @@
             
             // Update displays
             updateEfficiency();
+            updateSQM();
             updateVariance();
             
             // Keep edit mode active - don't toggle it off
@@ -7286,6 +7407,7 @@
             
             // Update efficiency and variance
             updateEfficiency();
+            updateSQM();
             updateVariance();
             
             // Update dashboard summary cards
@@ -7452,6 +7574,7 @@
                 
                 updateHourlyDataRealtime();
                 updateEfficiency();
+            updateSQM();
                 updateVariance();
                 saveSession();
             } else if (e.code === 'Backspace') {
@@ -7467,6 +7590,7 @@
                     
                     updateHourlyDataRealtime();
                     updateEfficiency();
+            updateSQM();
                     updateVariance();
                     saveSession();
                 }
@@ -7511,10 +7635,10 @@
     </script>
     
     <!-- ═══════════════════════════════════════════════════════════
-         SOBHA MODULAR PREMIUM FOOTER
+         SOBHA REALTY PREMIUM FOOTER
     ═══════════════════════════════════════════════════════════ -->
     <div class="sobha-footer">
-        Crafted with Precision | Powered by <span class="brand">SOBHA MODULAR</span> | Excellence in Every Detail
+        Crafted with Precision | Powered by <span class="brand">SOBHA REALTY</span> | Excellence in Every Detail
     </div>
     
 </body>
