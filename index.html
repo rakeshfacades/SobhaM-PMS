@@ -1625,6 +1625,9 @@
                         <span class="stat-label">Efficiency</span>
                         <span class="stat-value stat-efficiency" id="displayEfficiencyCompact">--%</span>
                     </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="sensorStatusIndicator" style="font-size: 12px; font-weight: 700;">⚪ Sensor Offline</span>
+                    </div>
                 </div>
                 
                 <!-- Cycle Time Progress Bar -->
@@ -2758,6 +2761,11 @@
         const EDIT_PASSWORD = 'Sobha123';
         const MONITOR_PIN = '0987';
         const ADMIN_PASSWORD = 'Admin@2026';
+
+        // ── ESP32 Photoelectric Sensor Integration ──────
+        let sensorRef = null;          // Firebase ref for current line's sensor pulse count
+        let sensorLastPulseCount = null; // Last pulse count value we processed
+        let sensorOnlineCheckInterval = null;
         
         // ── Cycle Time & Expected Counter Variables ──────
         let currentCycleStartTime = null;
@@ -6183,6 +6191,7 @@
             // Reset variables
             shiftEndWarningShown = false;
             currentSessionId = null;
+            stopSensorListener();
         }
 
         function continueOvertime() {
@@ -6215,6 +6224,7 @@
             // Reset variables
             shiftEndWarningShown = false;
             currentSessionId = null;
+            stopSensorListener();
         }
 
         // Listen for real-time updates from Firebase
@@ -6287,6 +6297,76 @@
             
             // ── NEW: Start idle detection ──────
             startIdleDetection();
+
+            // ── NEW: Start ESP32 sensor listener ──────
+            startSensorListener();
+        }
+
+        // ── ESP32 Photoelectric Sensor Listener ──────
+        // The ESP32 writes the running pulse count to:
+        //   lineSensors/line_{sanitizedLine}/pulseCount   (integer, increments on each detection)
+        //   lineSensors/line_{sanitizedLine}/heartbeat    (integer, increments ~every 15s)
+        // This is independent of sessionId, so the ESP32 config never needs to change
+        // even when a new session starts on the same physical line.
+        function startSensorListener() {
+            if (!sessionData || !sessionData.line) return;
+
+            const sanitizedLine = String(sessionData.line).toLowerCase().replace(/[^a-z0-9]/g, '_');
+            sensorRef = db.ref(`lineSensors/line_${sanitizedLine}/pulseCount`);
+
+            // Reset baseline: don't apply any pulses that happened before this listener attached
+            sensorRef.once('value').then((snapshot) => {
+                sensorLastPulseCount = snapshot.val() || 0;
+
+                sensorRef.on('value', (snap) => {
+                    const newCount = snap.val() || 0;
+
+                    if (sensorLastPulseCount === null) {
+                        sensorLastPulseCount = newCount;
+                        return;
+                    }
+
+                    if (newCount > sensorLastPulseCount) {
+                        const pulses = newCount - sensorLastPulseCount;
+                        for (let i = 0; i < pulses; i++) {
+                            recordCycleCount(1);
+                        }
+                    }
+                    // If newCount < sensorLastPulseCount, the ESP32 likely restarted/reset its counter.
+                    // Just resync the baseline without applying a decrement.
+                    sensorLastPulseCount = newCount;
+                });
+            });
+
+            // Show "sensor online" status: poll the heartbeat counter every 10s
+            // and check it's still increasing compared to the last poll.
+            const onlineEl = document.getElementById('sensorStatusIndicator');
+            if (onlineEl) {
+                let lastHeartbeatValue = null;
+
+                sensorOnlineCheckInterval = setInterval(() => {
+                    db.ref(`lineSensors/line_${sanitizedLine}/heartbeat`).once('value').then((snap) => {
+                        const hb = snap.val();
+                        const hasValue = (hb !== null && hb !== undefined);
+                        const changed = hasValue && (lastHeartbeatValue === null || hb !== lastHeartbeatValue);
+                        lastHeartbeatValue = hb;
+                        onlineEl.textContent = changed ? '🟢 Sensor Online' : '⚪ Sensor Offline';
+                        onlineEl.style.color = changed ? '#2e7d32' : '#999';
+                    });
+                }, 10000);
+            }
+        }
+
+        function stopSensorListener() {
+            if (sensorRef) {
+                sensorRef.off();
+                sensorRef = null;
+            }
+            sensorLastPulseCount = null;
+            if (sensorOnlineCheckInterval) {
+                clearInterval(sensorOnlineCheckInterval);
+                sensorOnlineCheckInterval = null;
+            }
         }
 
         function updateTimers() {
@@ -7485,6 +7565,7 @@
                     if (shiftEndCheckInterval) {
                         clearInterval(shiftEndCheckInterval);
                     }
+                    stopSensorListener();
                     
                     // Go back to role selection
                     document.getElementById('monitorScreen').classList.add('hidden');
@@ -7545,6 +7626,34 @@
             });
         }
 
+        // ── Shared cycle-count increment/decrement (keyboard + sensor) ──────
+        function recordCycleCount(delta) {
+            if (delta < 0 && actualCount <= 0) return;
+
+            actualCount += delta;
+            if (actualCount < 0) actualCount = 0;
+
+            document.getElementById('actualValue').textContent = actualCount;
+
+            // Update top bar
+            document.getElementById('displayActualCompact').textContent = actualCount;
+            const efficiency = sessionData.plan > 0 ? Math.round((actualCount / sessionData.plan) * 100) : 0;
+            document.getElementById('displayEfficiencyCompact').textContent = efficiency + '%';
+
+            if (delta > 0) {
+                // Celebration animation only on increment
+                const actualDisplay = document.getElementById('displayActualCompact');
+                actualDisplay.classList.add('celebration');
+                setTimeout(() => actualDisplay.classList.remove('celebration'), 600);
+            }
+
+            updateHourlyDataRealtime();
+            updateEfficiency();
+            updateSQM();
+            updateVariance();
+            saveSession();
+        }
+
         // Keyboard controls
         document.addEventListener('keydown', function(e) {
             // Only work when monitor screen is visible
@@ -7559,41 +7668,10 @@
             
             if (e.code === 'Space') {
                 e.preventDefault();
-                actualCount++;
-                document.getElementById('actualValue').textContent = actualCount;
-                
-                // Update top bar
-                document.getElementById('displayActualCompact').textContent = actualCount;
-                const efficiency = sessionData.plan > 0 ? Math.round((actualCount / sessionData.plan) * 100) : 0;
-                document.getElementById('displayEfficiencyCompact').textContent = efficiency + '%';
-                
-                // Add celebration animation
-                const actualDisplay = document.getElementById('displayActualCompact');
-                actualDisplay.classList.add('celebration');
-                setTimeout(() => actualDisplay.classList.remove('celebration'), 600);
-                
-                updateHourlyDataRealtime();
-                updateEfficiency();
-            updateSQM();
-                updateVariance();
-                saveSession();
+                recordCycleCount(1);
             } else if (e.code === 'Backspace') {
                 e.preventDefault();
-                if (actualCount > 0) {
-                    actualCount--;
-                    document.getElementById('actualValue').textContent = actualCount;
-                    
-                    // Update top bar
-                    document.getElementById('displayActualCompact').textContent = actualCount;
-                    const efficiency = sessionData.plan > 0 ? Math.round((actualCount / sessionData.plan) * 100) : 0;
-                    document.getElementById('displayEfficiencyCompact').textContent = efficiency + '%';
-                    
-                    updateHourlyDataRealtime();
-                    updateEfficiency();
-            updateSQM();
-                    updateVariance();
-                    saveSession();
-                }
+                recordCycleCount(-1);
             } else if (e.code === 'KeyD') {
                 e.preventDefault();
                 toggleDowntime();
