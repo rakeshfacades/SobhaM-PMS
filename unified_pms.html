@@ -1292,7 +1292,7 @@ async function renderDashboard(content, backBtn) {
       if (!dateGroup) return;
       Object.values(dateGroup).forEach(r => { if (r) allReports.push(r); });
     });
-    allReports.sort((a,b) => (b.savedAt||'') > (a.savedAt||'') ? 1 : -1);
+    allReports.sort((a,b) => String(b.savedAt||'') > String(a.savedAt||'') ? 1 : -1);
 
     // ── Efficiency by line (last 14 days) ──────
     const cutoff = new Date();
@@ -1310,7 +1310,7 @@ async function renderDashboard(content, backBtn) {
 
     // ── Today's summary ──────────────────
     const todayReports = allReports.filter(r =>
-      r.date === today || (r.savedAt && r.savedAt.startsWith(today))
+      r.date === today || (r.savedAt && String(r.savedAt).startsWith(today))
     );
     const todayPlan   = todayReports.reduce((s,r) => s + (r.plan||0), 0);
     const todayActual = todayReports.reduce((s,r) => s + (r.actual||0), 0);
