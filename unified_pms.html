@@ -272,8 +272,16 @@
 
   .modules-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 18px;
+  }
+
+  @media (max-width: 900px) {
+    .modules-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 560px) {
+    .modules-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   }
 
   .module-card {
@@ -1274,6 +1282,7 @@ async function renderAdmin(content, backBtn) {
   content.innerHTML = `${backBtn}<div class="spinner"></div>`;
 
   try {
+    // Admin reads all users — requires .read: "auth != null" on /users
     const snap  = await db.ref('users').once('value');
     const users = snap.val() || {};
 
