@@ -1222,12 +1222,13 @@ function getGreeting() {
 // ═══════════════════════════════════════════════════════════
 function openModule(id) {
   const content = document.getElementById('app-content');
-
   const backBtn = `<button class="btn-back" onclick="renderHome()">← Back to Home</button>`;
 
   switch (id) {
     case 'admin':     renderAdmin(content, backBtn);     break;
     case 'dashboard': renderDashboard(content, backBtn); break;
+    case 'monitor':   renderMonitor(content);            break;
+    case 'view':      renderViewer(content);             break;
     default:          renderPlaceholder(content, backBtn, id); break;
   }
 }
@@ -1244,6 +1245,132 @@ function renderPlaceholder(content, backBtn, id) {
       <div class="coming-soon-badge">Coming in Phase 2</div>
     </div>
   `;
+}
+
+// ─── Monitor Module (full-screen iframe to Assembly PMS) ───
+// The Assembly PMS (index.html) is the fully functional monitor.
+// We load it in a full-screen overlay so the user gets 100% of its
+// functionality. When they click "Back" inside it or press Escape here,
+// they return to the unified home screen.
+// Once the unified PMS matures, this iframe will be replaced by native code.
+function renderMonitor(content) {
+  // Replace entire app-content with full-screen iframe overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'monitor-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+  `;
+
+  overlay.innerHTML = `
+    <div style="
+      background: linear-gradient(135deg, #2c2c3e, #1a1a2e);
+      border-bottom: 2px solid #d4af37;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 44px;
+      flex-shrink: 0;
+    ">
+      <button onclick="closeMonitorOverlay()" style="
+        background: rgba(198,40,40,0.25);
+        border: 1px solid rgba(198,40,40,0.5);
+        color: #ef9a9a;
+        border-radius: 7px;
+        padding: 5px 14px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        letter-spacing: 0.3px;
+      ">← Back to Home</button>
+      <span style="color: #d4af37; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">
+        📺 MONITOR — Assembly PMS
+      </span>
+      <span style="color: #708090; font-size: 11px; margin-left: auto;">
+        Press Spacebar to count · Press D for Downtime
+      </span>
+    </div>
+    <iframe
+      src="index.html"
+      id="monitor-iframe"
+      style="flex: 1; border: none; width: 100%; background: #1a1a2e;"
+      allow="fullscreen"
+    ></iframe>
+  `;
+
+  document.body.appendChild(overlay);
+  // Prevent body scroll while overlay is open
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMonitorOverlay() {
+  const overlay = document.getElementById('monitor-overlay');
+  if (overlay) overlay.remove();
+  document.body.style.overflow = '';
+  renderHome();
+}
+
+// ─── Viewer Module (read-only, same iframe approach) ───
+function renderViewer(content) {
+  const overlay = document.createElement('div');
+  overlay.id = 'viewer-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+  `;
+
+  overlay.innerHTML = `
+    <div style="
+      background: linear-gradient(135deg, #2c2c3e, #1a1a2e);
+      border-bottom: 2px solid #d4af37;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 44px;
+      flex-shrink: 0;
+    ">
+      <button onclick="closeViewerOverlay()" style="
+        background: rgba(198,40,40,0.25);
+        border: 1px solid rgba(198,40,40,0.5);
+        color: #ef9a9a;
+        border-radius: 7px;
+        padding: 5px 14px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+      ">← Back to Home</button>
+      <span style="color: #d4af37; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">
+        👁 LIVE VIEW — Assembly PMS
+      </span>
+    </div>
+    <iframe
+      src="index.html"
+      id="viewer-iframe"
+      style="flex: 1; border: none; width: 100%; background: #1a1a2e;"
+    ></iframe>
+  `;
+
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+}
+
+function closeViewerOverlay() {
+  const overlay = document.getElementById('viewer-overlay');
+  if (overlay) overlay.remove();
+  document.body.style.overflow = '';
+  renderHome();
 }
 
 // ═══════════════════════════════════════════════════════════
