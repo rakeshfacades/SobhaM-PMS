@@ -1607,8 +1607,10 @@ function openModule(id) {
   switch (id) {
     case 'admin':     renderAdmin(content, backBtn);     break;
     case 'dashboard': renderDashboard(content, backBtn); break;
+    case 'monitor':   renderMonitor(content);            break;
     case 'plan':      renderPlan(content);             break;
     case 'machine':   renderRun(content);              break;
+    case 'material':  renderMaterial(content);          break;
     case 'view':      renderViewer(content);             break;
     default:          renderPlaceholder(content, backBtn, id); break;
   }
@@ -2240,83 +2242,97 @@ function showToast(msg, type = 'info') {
 //  MACHINE PMS — SHARED STATE & UTILS
 // ═══════════════════════════════════════════════════════════
 const MP = {
-  // Firebase refs
-  ordersRef:   () => db.ref('machineOrders'),
-  sessRef:     () => db.ref('machineSessions'),
-  machRef:     () => db.ref('machines'),
-  settingsRef: () => db.ref('machineSettings'),
+  ordersRef:    () => db.ref('machineOrders'),
+  sessRef:      () => db.ref('machineSessions'),
+  machRef:      () => db.ref('machines'),
+  settingsRef:  () => db.ref('machineSettings'),
+  alertsRef:    () => db.ref('machineAlerts'),
 
-  // Local cache (loaded on module open)
   orders:   [],
   sessions: [],
   machines: [],
+  alerts:   [],
+
+  // Master data — full structure matching original Machine PMS
   settings: {
-    projects:  [],
-    cls:       [],
-    items:     ['Mullion','Transom','Tube','Cover Cap','Panel Frame','Bracket','Sill Bar','End Cap'],
-    machines:  [
-      {id:'m1', name:'SBZ 150', machId:'MCH-001'},
-      {id:'m2', name:'SBZ 151', machId:'MCH-004'},
-      {id:'m3', name:'SBZ 150', machId:'MCH-002'},
-      {id:'m4', name:'SBZ 151', machId:'MCH-005'},
-      {id:'m5', name:'SBZ 150', machId:'MCH-003'},
+    projects:     [{name:'Marina Tower',code:'MT-001'},{name:'Palm Residences',code:'PR-002'}],
+    scopes:       ['Facade','Cladding','Curtain Wall'],
+    boqs:         [
+      {id:'b1',name:'BOQ-A1',scope:'Facade'},
+      {id:'b2',name:'BOQ-A2',scope:'Facade'},
+      {id:'b3',name:'BOQ-B1',scope:'Cladding'},
+    ],
+    typologies:   [
+      {id:'t1',name:'Type A',boqId:'b1',items:['Mullion','Transom','Cover Cap','Bracket']},
+      {id:'t2',name:'Type B',boqId:'b1',items:['Mullion','Transom','Tube','Sill Bar']},
+      {id:'t3',name:'Type C',boqId:'b2',items:['Mullion','Cover Cap','End Cap']},
+      {id:'t4',name:'Type D',boqId:'b3',items:['Panel Frame','Bracket','Tube']},
+    ],
+    items:        ['Mullion','Transom','Tube','Cover Cap','Panel Frame','Bracket','Sill Bar','End Cap'],
+    cls:          [],
+    batch:        ['Batch 1','Batch 2','Batch 3'],
+    pi:           ['PI-2025-001','PI-2025-002','PI-2025-003'],
+    machineTypes: [
+      {id:'mt1',name:'SBZ 150',units:['MCH-001','MCH-002','MCH-003']},
+      {id:'mt2',name:'SBZ 151',units:['MCH-004','MCH-005']},
     ],
     dtr: ['Breakdown','Setup/Changeover','No Material','Waiting for Job Card','Operator Absent','Maintenance'],
   },
 
   // Run state
   activeSession: null,
-  timerInt: null,
-  timerSec: 0,
+  timerInt:      null,
+  timerSec:      0,
 
   // UI state
-  planTab: 'orders',
-  schView: null,  // null = order list, moId = sub-orders for that order
+  planTab:   'orders',
+  schView:   null,
+  wipFilter: 'ready',
 };
 
 // ── Utils ──────────────────────────────────────
-function mpTs() { return new Date().toTimeString().slice(0,5); }
+function mpTs()     { return new Date().toTimeString().slice(0,5); }
 function mpTsLong() { return new Date().toLocaleString('en-GB',{hour12:false}).slice(0,16); }
-function mpPad(n) { return n < 10 ? '0'+n : ''+n; }
+function mpPad(n)   { return n < 10 ? '0'+n : ''+n; }
 
 function mpStBadge(s) {
   const map = {
-    draft:           '<span class="sbadge sb-draft">Draft</span>',
-    released:        '<span class="sbadge sb-released">Released</span>',
-    'in-progress':   '<span class="sbadge sb-progress">In Progress</span>',
-    wip:             '<span class="sbadge sb-wip">WIP</span>',
+    draft:'<span class="sbadge sb-draft">Draft</span>',
+    released:'<span class="sbadge sb-released">Released</span>',
+    'in-progress':'<span class="sbadge sb-progress">In Progress</span>',
+    partial:'<span class="sbadge sb-pending">Partial</span>',
+    wip:'<span class="sbadge sb-wip">WIP Ready</span>',
     'ready-assembly':'<span class="sbadge sb-ready">Ready for Assembly</span>',
-    'sent-assembly': '<span class="sbadge sb-sent">Sent to Assembly</span>',
-    transferred:     '<span class="sbadge sb-complete">Transferred</span>',
-    complete:        '<span class="sbadge sb-complete">Complete</span>',
-    partial:         '<span class="sbadge sb-pending">Partial</span>',
+    'sent-assembly':'<span class="sbadge sb-sent">Sent to Assembly</span>',
+    transferred:'<span class="sbadge sb-complete">Transferred</span>',
+    complete:'<span class="sbadge sb-complete">Complete</span>',
     'pending-verify':'<span class="sbadge sb-pending">Pending Verify</span>',
-    approved:        '<span class="sbadge sb-approved">Approved</span>',
-    rejected:        '<span class="sbadge sb-rejected">Rejected</span>',
-    running:         '<span class="sbadge sb-running">Running</span>',
-    paused:          '<span class="sbadge sb-paused">Paused</span>',
-    idle:            '<span class="sbadge sb-draft">Idle</span>',
-    downtime:        '<span class="sbadge sb-rejected">Downtime</span>',
+    approved:'<span class="sbadge sb-approved">Approved</span>',
+    rejected:'<span class="sbadge sb-rejected">Rejected</span>',
+    running:'<span class="sbadge sb-running">Running</span>',
+    paused:'<span class="sbadge sb-paused">Paused</span>',
+    idle:'<span class="sbadge sb-draft">Idle</span>',
+    downtime:'<span class="sbadge sb-rejected">Downtime</span>',
   };
   return map[s] || `<span class="sbadge sb-draft">${s}</span>`;
 }
 
 function mpPct(o) {
-  const total = (o.subs||[]).reduce((a,s)=>a+(s.qty||0),0);
-  const done  = (o.subs||[]).reduce((a,s)=>a+(s.done||0)+(s.pendingDone||0),0);
+  const total = (o.subs||[]).reduce((a,s)=>a+(s.qty||0), 0);
+  const done  = (o.subs||[]).reduce((a,s)=>a+(s.done||0)+(s.pendingDone||0), 0);
   return total > 0 ? Math.round(done/total*100) : 0;
 }
 
 function mpProgBar(p) {
-  p = Math.min(p,100);
+  p = Math.min(p, 100);
   const col = p===100 ? 'pf-green' : p>50 ? 'pf-blue' : 'pf-amber';
   return `<div class="prog-bar"><div class="prog-fill ${col}" style="width:${p}%"></div></div>`;
 }
 
 function mpMatBadge(s) {
   if (!s.matBy) return '<span class="sbadge sb-draft">— Not entered</span>';
-  if (s.matQty >= s.qty) return `<span class="sbadge sb-approved">✅ ${s.matQty}/${s.qty}</span>`;
-  if (s.matQty > 0) return `<span class="sbadge sb-pending">⚠ ${s.matQty}/${s.qty}</span>`;
+  if ((s.matQty||0) >= s.qty) return `<span class="sbadge sb-approved">✅ ${s.matQty}/${s.qty}</span>`;
+  if ((s.matQty||0) > 0)     return `<span class="sbadge sb-pending">⚠ ${s.matQty}/${s.qty}</span>`;
   return `<span class="sbadge sb-rejected">❌ 0/${s.qty}</span>`;
 }
 
@@ -2324,48 +2340,68 @@ function mpCheckOrderStatus(moId) {
   const o = MP.orders.find(x=>x.id===moId);
   if (!o) return;
   const allDone = (o.subs||[]).every(s=>s.status==='complete');
-  if (allDone) o.status = 'wip';
-  else if ((o.subs||[]).some(s=>(s.done||0)>0||(s.pendingDone||0)>0) && o.status==='released') o.status='in-progress';
+  if (allDone) { o.status = 'wip'; return; }
+  const anyProgress = (o.subs||[]).some(s=>(s.done||0)>0||(s.pendingDone||0)>0);
+  if (anyProgress && o.status==='released') o.status = 'in-progress';
 }
 
-// ── Load data from Firebase ────────────────────
+// ── Machine name lookup ─────────────────────────
+function mpMachineOpts(selectedName) {
+  let opts = '<option value="">Select Machine</option>';
+  (MP.settings.machineTypes||[]).forEach(mt => {
+    (mt.units||[]).forEach(u => {
+      const val = `${mt.name}|${u}`;
+      const label = `${mt.name} — ${u}`;
+      opts += `<option value="${val}"${selectedName===val?' selected':''}>${label}</option>`;
+    });
+  });
+  return opts;
+}
+
+// ── Load all data from Firebase ─────────────────
 async function mpLoadAll() {
-  const [oSnap, sSnap, mSnap, stSnap] = await Promise.all([
+  const [oSnap, sSnap, mSnap, stSnap, aSnap] = await Promise.all([
     MP.ordersRef().once('value'),
     MP.sessRef().once('value'),
     MP.machRef().once('value'),
     MP.settingsRef().once('value'),
+    MP.alertsRef().once('value'),
   ]);
 
-  // Orders
   const od = oSnap.val() || {};
-  MP.orders = Object.entries(od).map(([id,o])=>({...o, id, subs: o.subs ? Object.values(o.subs) : []}));
+  MP.orders = Object.entries(od).map(([id,o])=>({...o,id,subs:o.subs?Object.values(o.subs):[]}));
 
-  // Sessions
   const sd = sSnap.val() || {};
   MP.sessions = Object.entries(sd).map(([id,s])=>({...s,id}));
 
-  // Machines — use Firebase if exists, else defaults
   const md = mSnap.val();
   if (md) MP.machines = Object.entries(md).map(([id,m])=>({...m,id}));
+  else {
+    // Seed machines from machineTypes
+    MP.machines = [];
+    (MP.settings.machineTypes||[]).forEach(mt=>{
+      (mt.units||[]).forEach(u=>{
+        const id = `${mt.id}_${u}`;
+        const m = {id, name:mt.name, machId:u, status:'idle', job:'', prog:0};
+        MP.machines.push(m);
+        MP.machRef().child(id).set(m);
+      });
+    });
+  }
 
-  // Settings
   const std = stSnap.val();
   if (std) {
-    if (std.items)    MP.settings.items    = std.items;
-    if (std.projects) MP.settings.projects = std.projects;
-    if (std.cls)      MP.settings.cls      = std.cls;
-    if (std.machines) MP.settings.machines = std.machines;
-    if (std.dtr)      MP.settings.dtr      = std.dtr;
+    // Merge with defaults — keep defaults if Firebase empty
+    ['projects','scopes','boqs','typologies','items','cls','batch','pi','machineTypes','dtr'].forEach(k=>{
+      if (std[k] && std[k].length) MP.settings[k] = std[k];
+    });
+  } else {
+    // First run — save defaults
+    await MP.settingsRef().set(MP.settings);
   }
 
-  // Seed machines to Firebase if empty
-  if (!md) {
-    const machObj = {};
-    MP.settings.machines.forEach(m => { machObj[m.id] = m; });
-    await MP.machRef().set(machObj);
-    MP.machines = MP.settings.machines.map(m=>({...m, status:'idle', job:'', prog:0}));
-  }
+  const ad = aSnap.val() || {};
+  MP.alerts = Object.entries(ad).map(([id,a])=>({...a,id}));
 }
 
 async function mpSaveOrder(o) {
@@ -2388,13 +2424,16 @@ async function mpSaveSettings() {
   await MP.settingsRef().set(MP.settings);
 }
 
+async function mpSaveAlert(a) {
+  await MP.alertsRef().child(a.id).set(a);
+}
+
 // ═══════════════════════════════════════════════════════════
 //  ORDERS & PLANNING MODULE
 // ═══════════════════════════════════════════════════════════
 async function renderPlan(content) {
   content.innerHTML = `<div class="spinner"></div>`;
   await mpLoadAll();
-
   MP.planTab = 'orders';
   MP.schView = null;
   renderPlanContent(content);
@@ -2402,7 +2441,8 @@ async function renderPlan(content) {
 
 function renderPlanContent(content) {
   const pendVerify = MP.sessions.filter(s=>s.status==='pending-verify').length;
-  const wipCount   = MP.orders.filter(o=>o.status==='wip'||o.status==='ready-assembly').length;
+  const wipCount   = MP.orders.filter(o=>o.status==='wip').length;
+  const unreadAlerts = MP.alerts.filter(a=>!a.read).length;
 
   content.innerHTML = `
     <button class="btn-back" onclick="renderHome()">← Back to Home</button>
@@ -2410,23 +2450,23 @@ function renderPlanContent(content) {
       <div class="panel-title">📋 <span>Orders & Planning</span></div>
       <button class="btn btn-primary btn-sm" onclick="mpRefresh()">↻ Refresh</button>
     </div>
-
     <div class="mch-tabs" id="mp-tabs">
-      <button class="mch-tab ${MP.planTab==='orders'?'active':''}" onclick="mpTab('orders',this)">📋 Orders</button>
-      <button class="mch-tab ${MP.planTab==='verify'?'active':''}" onclick="mpTab('verify',this)" id="mp-verify-tab">
+      <button class="mch-tab ${MP.planTab==='orders'?'active':''}"   onclick="mpTab('orders',this)">📋 Orders</button>
+      <button class="mch-tab ${MP.planTab==='verify'?'active':''}"   onclick="mpTab('verify',this)">
         ✅ Verify${pendVerify>0?`<span class="tbadge">${pendVerify}</span>`:''}
       </button>
-      <button class="mch-tab ${MP.planTab==='wip'?'active':''}" onclick="mpTab('wip',this)">
+      <button class="mch-tab ${MP.planTab==='alerts'?'active':''}"   onclick="mpTab('alerts',this)">
+        🔔 Alerts${unreadAlerts>0?`<span class="tbadge">${unreadAlerts}</span>`:''}
+      </button>
+      <button class="mch-tab ${MP.planTab==='wip'?'active':''}"      onclick="mpTab('wip',this)">
         📦 WIP${wipCount>0?`<span class="tbadge">${wipCount}</span>`:''}
       </button>
       <button class="mch-tab ${MP.planTab==='machines'?'active':''}" onclick="mpTab('machines',this)">🔧 Machines</button>
-      <button class="mch-tab ${MP.planTab==='history'?'active':''}" onclick="mpTab('history',this)">📜 History</button>
+      <button class="mch-tab ${MP.planTab==='history'?'active':''}"  onclick="mpTab('history',this)">📜 History</button>
       <button class="mch-tab ${MP.planTab==='settings'?'active':''}" onclick="mpTab('settings',this)">⚙️ Settings</button>
     </div>
-
     <div id="mp-content"></div>
   `;
-
   mpRenderTab();
 }
 
@@ -2444,6 +2484,7 @@ function mpRenderTab() {
   switch (MP.planTab) {
     case 'orders':   mpRenderOrders(c);   break;
     case 'verify':   mpRenderVerify(c);   break;
+    case 'alerts':   mpRenderAlerts(c);   break;
     case 'wip':      mpRenderWip(c);      break;
     case 'machines': mpRenderMachines(c); break;
     case 'history':  mpRenderHistory(c);  break;
@@ -2462,44 +2503,43 @@ async function mpRefresh() {
 function mpRenderOrders(c) {
   if (MP.schView) { mpRenderSubOrders(c, MP.schView); return; }
 
-  const activeOrders = MP.orders.filter(o=>o.status!=='transferred');
+  const active = MP.orders.filter(o=>o.status!=='transferred');
 
   let h = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div style="font-size:14px;color:var(--slate)">${MP.orders.length} total orders, ${activeOrders.length} active</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div style="font-size:13px;color:var(--slate)">${MP.orders.length} total · ${active.length} active</div>
       <button class="btn btn-primary" onclick="mpOpenCreateOrder()">+ New Order</button>
     </div>
   `;
 
-  if (!activeOrders.length) {
+  if (!active.length) {
     h += `<div class="empty-state"><div class="empty-icon">📋</div><p>No orders yet. Click "+ New Order" to create one.</p></div>`;
   } else {
-    activeOrders.forEach(o => {
-      const p = mpPct(o);
-      const ms = (o.subs||[]).filter(s=>s.matQty>=s.qty).length;
-      const matBadge = ms===(o.subs||[]).length && ms>0
+    active.forEach(o => {
+      const p   = mpPct(o);
+      const ms  = (o.subs||[]).filter(s=>(s.matQty||0)>=(s.qty||1)).length;
+      const tot = (o.subs||[]).length;
+      const matBadge = ms===tot && tot>0
         ? '<span class="sbadge sb-approved">✅ Full Material</span>'
         : ms>0
-          ? '<span class="sbadge sb-pending">⚠ Partial</span>'
+          ? '<span class="sbadge sb-pending">⚠ Partial Material</span>'
           : '<span class="sbadge sb-rejected">❌ No Material</span>';
-
       h += `
         <div class="mo-card ${o.priority?'urgent':''}" onclick="MP.schView='${o.id}';mpRenderTab()">
           <div class="mo-hdr">
             <div>
               <div class="mo-cl">${o.cl||'—'} ${o.priority?'<span class="sbadge sb-urgent">🔥 Urgent</span>':''}</div>
-              <div class="mo-project">${o.project||'—'} · ${o.id}</div>
+              <div class="mo-project">${o.project||'—'} · ${o.scope||''} → ${o.boqName||''} → ${o.typologyName||''}</div>
             </div>
-            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
               ${matBadge}
               ${mpStBadge(o.status)}
             </div>
           </div>
           <div class="mo-meta">
             <span>📄 ${o.pi||'No PI'}</span>
-            <span>📦 ${o.boqName||'—'} / ${o.typologyName||'—'}</span>
-            <span>🔢 ${(o.subs||[]).length} components</span>
-            <span>📅 ${o.batch||'—'}</span>
+            <span>📦 Batch: ${o.batch||'—'}</span>
+            <span>🔢 ${tot} components</span>
           </div>
           ${mpProgBar(p)}
           <div style="font-size:11px;color:var(--slate);margin-top:4px">${p}% complete</div>
@@ -2507,7 +2547,6 @@ function mpRenderOrders(c) {
       `;
     });
   }
-
   c.innerHTML = h;
 }
 
@@ -2516,8 +2555,6 @@ function mpRenderSubOrders(c, moId) {
   const o = MP.orders.find(x=>x.id===moId);
   if (!o) { MP.schView=null; mpRenderTab(); return; }
 
-  const machOpts = MP.machines.map(m=>`<option value="${m.name}">${m.name} (${m.machId})</option>`).join('');
-  const itemOpts = MP.settings.items.map(i=>`<option value="${i}">${i}</option>`).join('');
   const today = new Date().toISOString().slice(0,10);
 
   let h = `
@@ -2528,11 +2565,11 @@ function mpRenderSubOrders(c, moId) {
       ${o.priority?'<span class="sbadge sb-urgent">🔥 Urgent</span>':''}
     </div>
 
-    <div class="summary-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
-      <div class="summary-card"><div class="summary-label">PI</div><div class="summary-value" style="font-size:16px">${o.pi||'—'}</div></div>
-      <div class="summary-card"><div class="summary-label">BOQ</div><div class="summary-value" style="font-size:16px">${o.boqName||'—'}</div></div>
-      <div class="summary-card"><div class="summary-label">Typology</div><div class="summary-value" style="font-size:16px">${o.typologyName||'—'}</div></div>
-      <div class="summary-card"><div class="summary-label">Batch</div><div class="summary-value" style="font-size:16px">${o.batch||'—'}</div></div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+      <div class="metric-box"><div class="lbl">PI</div><div class="val" style="font-size:16px">${o.pi||'—'}</div></div>
+      <div class="metric-box"><div class="lbl">Scope</div><div class="val" style="font-size:16px">${o.scope||'—'}</div></div>
+      <div class="metric-box"><div class="lbl">BOQ</div><div class="val" style="font-size:16px">${o.boqName||'—'}</div></div>
+      <div class="metric-box"><div class="lbl">Typology</div><div class="val" style="font-size:16px">${o.typologyName||'—'}</div></div>
     </div>
 
     <div class="card" style="margin-bottom:16px">
@@ -2541,7 +2578,7 @@ function mpRenderSubOrders(c, moId) {
         <button class="btn btn-ghost btn-sm" onclick="mpAddSub('${o.id}')">+ Add Component</button>
       </div>
       <div style="padding:0 16px">
-        <div style="display:grid;grid-template-columns:1fr 80px 150px 130px 60px auto auto;gap:8px;padding:8px 0;font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;border-bottom:2px solid var(--light-gold)">
+        <div style="display:grid;grid-template-columns:1fr 70px 200px 130px 55px auto auto;gap:8px;padding:8px 0;font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;border-bottom:2px solid var(--light-gold)">
           <span>Item</span><span>Qty</span><span>Machine</span><span>Plan Date</span><span>Seq</span><span>Status</span><span></span>
         </div>
   `;
@@ -2550,19 +2587,21 @@ function mpRenderSubOrders(c, moId) {
     h += `<div style="padding:20px;text-align:center;color:var(--slate)">No components yet. Click "+ Add Component"</div>`;
   } else {
     (o.subs||[]).forEach(s => {
-      const doneInfo = s.done>0||s.pendingDone>0 ? `<div style="font-size:10px;color:var(--slate)">Done:${s.done} · Pending:${s.pendingDone}</div>` : '';
-      const locked = s.status!=='draft';
+      const doneInfo = (s.done||0)>0||(s.pendingDone||0)>0
+        ? `<div style="font-size:10px;color:var(--slate)">Done:${s.done||0} · Pending:${s.pendingDone||0}</div>` : '';
       h += `
         <div class="sub-row">
           <div><div style="font-weight:600;font-size:13px">${s.item}</div>${doneInfo}</div>
-          <input type="number" value="${s.qty}" min="1" ${locked?'style="background:#f9fafb"':''} 
+          <input type="number" value="${s.qty||0}" min="1"
             onchange="mpUpdateSub('${o.id}','${s.id}','qty',this.value)"/>
           <select onchange="mpUpdateSub('${o.id}','${s.id}','machine',this.value)">
-            <option value="">Select</option>${machOpts.replace(`value="${s.machine}"`,`value="${s.machine}" selected`)}
+            ${mpMachineOpts(s.machine||'')}
           </select>
-          <input type="date" value="${s.planDate||''}" onchange="mpUpdateSub('${o.id}','${s.id}','planDate',this.value)"/>
-          <input type="number" value="${s.seq||1}" min="1" onchange="mpUpdateSub('${o.id}','${s.id}','seq',this.value)"/>
-          ${mpStBadge(s.status)}
+          <input type="date" value="${s.planDate||''}"
+            onchange="mpUpdateSub('${o.id}','${s.id}','planDate',this.value)"/>
+          <input type="number" value="${s.seq||1}" min="1"
+            onchange="mpUpdateSub('${o.id}','${s.id}','seq',this.value)"/>
+          ${mpStBadge(s.status||'draft')}
           <button class="btn btn-danger btn-sm" onclick="mpRemoveSub('${o.id}','${s.id}')">✕</button>
         </div>
       `;
@@ -2571,24 +2610,24 @@ function mpRenderSubOrders(c, moId) {
 
   h += `</div></div>`;
 
-  // Send to Assembly section
-  const relSubs = (o.subs||[]).filter(s=>s.status!=='draft'&&(s.done-s.sentQty)>0);
+  // Send to Assembly
+  const relSubs = (o.subs||[]).filter(s=>s.status!=='draft'&&((s.done||0)-(s.sentQty||0))>0);
   if (relSubs.length) {
     h += `
       <div class="card" style="margin-bottom:16px">
         <div class="card-header">→ Send Components to Assembly</div>
         <div style="padding:8px 16px">
-          <div class="al al-info">Send completed components to assembly without waiting for the full order.</div>
-          ${relSubs.map(s => {
-            const avail = s.done - s.sentQty;
+          <div class="al al-info">Send completed components to assembly without waiting for full order.</div>
+          ${relSubs.map(s=>{
+            const avail = (s.done||0)-(s.sentQty||0);
             return `
               <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6;flex-wrap:wrap">
-                <strong style="min-width:100px">${s.item}</strong>
-                <span style="font-size:12px;color:var(--slate)">Done:${s.done} · Sent:${s.sentQty} · Available:${avail}</span>
+                <strong style="min-width:110px">${s.item}</strong>
+                <span style="font-size:12px;color:var(--slate)">Done:${s.done||0} · Sent:${s.sentQty||0} · Available:${avail}</span>
                 <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-                  <input type="number" id="send-${s.id}" value="${avail}" min="1" max="${avail}" 
+                  <input type="number" id="send-${s.id}" value="${avail}" min="1" max="${avail}"
                     style="width:70px;padding:5px 8px;border:1.5px solid #e0e0e0;border-radius:7px;font-size:12px"/>
-                  <button class="btn btn-sm" style="background:var(--success);color:white" 
+                  <button class="btn btn-sm" style="background:var(--success);color:white"
                     onclick="mpSendToAssembly('${o.id}','${s.id}')">→ Send</button>
                 </div>
               </div>
@@ -2612,88 +2651,204 @@ function mpRenderSubOrders(c, moId) {
   if (!o.priority) {
     h += `<button class="btn btn-ghost btn-sm" onclick="mpSetPriority('${o.id}')">🚩 Flag Urgent</button>`;
   }
-  h += `<button class="btn btn-danger btn-sm" onclick="mpDeleteOrder('${o.id}')">🗑 Delete Order</button>`;
+  h += `<button class="btn btn-danger btn-sm" onclick="mpDeleteOrder('${o.id}')">🗑 Delete</button>`;
   h += `</div>`;
 
   c.innerHTML = h;
 }
 
-// ── CREATE ORDER MODAL ─────────────────────────
+// ── CREATE ORDER MODAL (Scope→BOQ→Typology cascade) ───
+let mpCoItems = [];
+
 function mpOpenCreateOrder() {
-  const clOpts = MP.settings.cls.map(c=>`<option value="${c}">${c}</option>`).join('');
-  const projOpts = MP.settings.projects.map(p=>`<option value="${p.name}">${p.name} (${p.code})</option>`).join('');
+  const scopeOpts = (MP.settings.scopes||[]).map(s=>`<option>${s}</option>`).join('');
+  const batchOpts = (MP.settings.batch||[]).map(b=>`<option>${b}</option>`).join('');
+  const piOpts    = (MP.settings.pi||[]).map(p=>`<option>${p}</option>`).join('');
+  const clOpts    = (MP.settings.cls||[]).map(c=>`<option>${c}</option>`).join('');
+  const projOpts  = (MP.settings.projects||[]).map(p=>`<option value="${p.name}" data-code="${p.code}">${p.name}</option>`).join('');
+  const firstCode = (MP.settings.projects||[])[0]?.code || '';
+
+  mpCoItems = [];
 
   document.getElementById('user-modal-overlay').classList.add('open');
-  document.getElementById('modal-title').textContent = 'New Manufacturing Order';
+  document.getElementById('modal-title').textContent = 'Create New Order';
   document.getElementById('modal-pwd-group').style.display = 'none';
   document.getElementById('actions-grid').style.display = 'none';
 
   document.querySelector('.modal-body').innerHTML = `
-    <div class="form-group">
-      <label class="form-label">CL Number</label>
-      <select class="form-input" id="mo-cl">
-        <option value="">Select CL</option>${clOpts}
-      </select>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label class="form-label">Project</label>
+        <select class="form-input" id="co-proj"
+          onchange="document.getElementById('co-code').value=this.options[this.selectedIndex].getAttribute('data-code')||''">
+          ${projOpts}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Project Code</label>
+        <input class="form-input" id="co-code" readonly style="background:#f9fafb" value="${firstCode}">
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Project</label>
-      <select class="form-input" id="mo-project">
-        <option value="">Select Project</option>${projOpts}
-      </select>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label class="form-label">Scope</label>
+        <select class="form-input" id="co-scope" onchange="mpCoFilterBoq()">
+          ${scopeOpts}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">BOQ</label>
+        <select class="form-input" id="co-boq" onchange="mpCoFilterTyp()"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Typology</label>
+        <select class="form-input" id="co-typ" onchange="mpCoLoadItems()"></select>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">PI Number</label>
-      <input class="form-input" id="mo-pi" type="text" placeholder="e.g. PI-2025-001">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label class="form-label">CL Number</label>
+        <select class="form-input" id="co-cl">
+          <option value="">Select CL</option>${clOpts}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Batch</label>
+        <select class="form-input" id="co-batch">${batchOpts}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">PI Number</label>
+        <select class="form-input" id="co-pi">${piOpts}</select>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">BOQ</label>
-      <input class="form-input" id="mo-boq" type="text" placeholder="e.g. BOQ-A1">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label class="form-label">Total Qty (panels)</label>
+        <input class="form-input" type="number" id="co-qty" placeholder="e.g. 50" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <select class="form-input" id="co-prio">
+          <option value="0">Normal</option>
+          <option value="1">🔥 Urgent</option>
+        </select>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Typology</label>
-      <input class="form-input" id="mo-typology" type="text" placeholder="e.g. Type A">
+    <div style="font-size:13px;font-weight:700;margin:8px 0 6px;color:var(--navy)">
+      Components <span style="font-size:11px;font-weight:400;color:var(--slate)">(auto-loaded from Typology)</span>
     </div>
-    <div class="form-group">
-      <label class="form-label">Scope</label>
-      <input class="form-input" id="mo-scope" type="text" placeholder="e.g. Facade">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Batch</label>
-      <input class="form-input" id="mo-batch" type="text" placeholder="e.g. Batch 1">
-    </div>
+    <div id="co-items-list" style="margin-bottom:8px"></div>
+    <button class="btn btn-ghost btn-sm" onclick="mpCoAddItem()" style="margin-bottom:14px">+ Add Component</button>
   `;
 
   document.getElementById('modal-save-btn').textContent = 'Create Order';
-  document.getElementById('modal-save-btn').onclick = mpSaveNewOrder;
+  document.getElementById('modal-save-btn').onclick = mpDoCreateOrder;
+
+  // Cascade initialize
+  mpCoFilterBoq();
 }
 
-async function mpSaveNewOrder() {
-  const cl       = document.getElementById('mo-cl')?.value;
-  const project  = document.getElementById('mo-project')?.value;
-  const pi       = document.getElementById('mo-pi')?.value.trim();
-  const boqName  = document.getElementById('mo-boq')?.value.trim();
-  const typology = document.getElementById('mo-typology')?.value.trim();
-  const scope    = document.getElementById('mo-scope')?.value.trim();
-  const batch    = document.getElementById('mo-batch')?.value.trim();
+function mpCoFilterBoq() {
+  const scope = document.getElementById('co-scope')?.value;
+  const boqs  = (MP.settings.boqs||[]).filter(b=>b.scope===scope);
+  const el    = document.getElementById('co-boq');
+  if (el) {
+    el.innerHTML = boqs.map(b=>`<option value="${b.id}">${b.name}</option>`).join('') ||
+      '<option value="">No BOQs for this scope</option>';
+    mpCoFilterTyp();
+  }
+}
 
-  if (!cl || !project) { showToast('CL Number and Project are required.','error'); return; }
+function mpCoFilterTyp() {
+  const boqId = document.getElementById('co-boq')?.value;
+  const typs  = (MP.settings.typologies||[]).filter(t=>t.boqId===boqId);
+  const el    = document.getElementById('co-typ');
+  if (el) {
+    el.innerHTML = typs.map(t=>`<option value="${t.id}">${t.name}</option>`).join('') ||
+      '<option value="">No typologies for this BOQ</option>';
+    mpCoLoadItems();
+  }
+}
 
-  const projObj = MP.settings.projects.find(p=>p.name===project);
-  const id = 'MO-' + Date.now();
+function mpCoLoadItems() {
+  const typId = document.getElementById('co-typ')?.value;
+  const typ   = (MP.settings.typologies||[]).find(t=>t.id===typId);
+  mpCoItems   = typ ? (typ.items||[]).map(it=>({item:it, qty:''})) : [];
+  mpCoRenderItems();
+}
 
+function mpCoRenderItems() {
+  const el = document.getElementById('co-items-list');
+  if (!el) return;
+  const itemOpts = (MP.settings.items||[]).map(it=>`<option>${it}</option>`).join('');
+  if (!mpCoItems.length) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--slate);padding:8px">No components. Select a typology or add manually below.</div>`;
+    return;
+  }
+  el.innerHTML = mpCoItems.map((ci,i)=>`
+    <div style="display:grid;grid-template-columns:1fr 90px 32px;gap:7px;align-items:center;margin-bottom:7px">
+      <select style="padding:6px 8px;border:1.5px solid #e0e0e0;border-radius:7px;font-size:12px;font-family:inherit"
+        onchange="mpCoItems[${i}].item=this.value">
+        ${(MP.settings.items||[]).map(it=>`<option${ci.item===it?' selected':''}>${it}</option>`).join('')}
+      </select>
+      <input type="number" value="${ci.qty}" placeholder="Qty" min="1"
+        style="padding:6px 8px;border:1.5px solid #e0e0e0;border-radius:7px;font-size:12px;font-family:inherit"
+        oninput="mpCoItems[${i}].qty=this.value"/>
+      <button class="btn btn-danger btn-sm" onclick="mpCoItems.splice(${i},1);mpCoRenderItems()">✕</button>
+    </div>
+  `).join('');
+}
+
+function mpCoAddItem() {
+  mpCoItems.push({item:(MP.settings.items||[])[0]||'', qty:''});
+  mpCoRenderItems();
+}
+
+async function mpDoCreateOrder() {
+  const cl      = document.getElementById('co-cl')?.value;
+  const proj    = document.getElementById('co-proj')?.value;
+  const code    = document.getElementById('co-code')?.value;
+  const scope   = document.getElementById('co-scope')?.value;
+  const boqEl   = document.getElementById('co-boq');
+  const typEl   = document.getElementById('co-typ');
+  const boqId   = boqEl?.value;
+  const boqName = boqEl?.options[boqEl.selectedIndex]?.text || '';
+  const typId   = typEl?.value;
+  const typName = typEl?.options[typEl.selectedIndex]?.text || '';
+  const batch   = document.getElementById('co-batch')?.value;
+  const pi      = document.getElementById('co-pi')?.value;
+  const qty     = parseInt(document.getElementById('co-qty')?.value)||0;
+  const priority= document.getElementById('co-prio')?.value === '1';
+
+  if (!cl)   { showToast('Select a CL Number.','error'); return; }
+  if (!proj) { showToast('Select a Project.','error'); return; }
+  if (!mpCoItems.length) { showToast('Add at least one component.','error'); return; }
+  const invalid = mpCoItems.filter(ci=>!ci.qty||parseInt(ci.qty)<1);
+  if (invalid.length) { showToast('Enter quantity for all components.','error'); return; }
+
+  const id = 'MO-'+Date.now();
   const order = {
-    id, cl, project, code: projObj?.code||'',
-    pi, boqName, boqId:'', typologyName: typology, typologyId:'',
-    scope, batch, priority: false, status: 'draft',
+    id, cl, project:proj, code,
+    scope, boqId, boqName, typologyId:typId, typologyName:typName,
+    batch, pi, qty, priority, status:'draft',
     createdAt: new Date().toISOString(),
     createdBy: currentProfile?.userId || 'admin',
     subs: {},
   };
 
-  await mpSaveOrder(order);
-  MP.orders.push({...order, subs:[]});
+  const subsArr = mpCoItems.map((ci,i)=>({
+    id:'SO'+Date.now()+i, item:ci.item, qty:parseInt(ci.qty)||0,
+    done:0, pendingDone:0, rej:0, sentQty:0,
+    planDate:'', machine:'', seq:i+1, status:'draft',
+    matQty:0, matRemarks:'', matBy:'', matUpdated:'',
+  }));
+
+  subsArr.forEach(s=>{ order.subs[s.id]=s; });
+  await MP.ordersRef().child(id).set(order);
+  MP.orders.push({...order, subs:subsArr});
+
   closeUserModal();
-  showToast(`Order ${id} created.`, 'success');
+  showToast(`Order ${id} created.`,'success');
   MP.schView = id;
   mpRenderTab();
 }
@@ -2711,7 +2866,7 @@ async function mpUpdateSub(moId, soId, field, val) {
 }
 
 function mpAddSub(moId) {
-  const itemOpts = MP.settings.items.map(i=>`<option value="${i}">${i}</option>`).join('');
+  const itemOpts = (MP.settings.items||[]).map(i=>`<option>${i}</option>`).join('');
   document.getElementById('user-modal-overlay').classList.add('open');
   document.getElementById('modal-title').textContent = 'Add Component';
   document.getElementById('modal-pwd-group').style.display = 'none';
@@ -2741,7 +2896,7 @@ async function mpSaveNewSub(moId) {
     planDate:'', machine:'', seq:(o.subs||[]).length+1, status:'draft',
     matQty:0, matRemarks:'', matBy:'', matUpdated:'',
   };
-  if (!o.subs) o.subs = [];
+  if (!o.subs) o.subs=[];
   o.subs.push(sub);
   await mpSaveOrder(o);
   closeUserModal();
@@ -2752,7 +2907,9 @@ async function mpSaveNewSub(moId) {
 async function mpRemoveSub(moId, soId) {
   const o = MP.orders.find(x=>x.id===moId);
   const s = (o?.subs||[]).find(x=>x.id===soId);
-  if (s && (s.done>0||s.pendingDone>0)) { showToast('Cannot remove — production already recorded.','error'); return; }
+  if (s && ((s.done||0)>0||(s.pendingDone||0)>0)) {
+    showToast('Cannot remove — production already recorded.','error'); return;
+  }
   if (!confirm('Remove this component?')) return;
   o.subs = (o.subs||[]).filter(x=>x.id!==soId);
   await mpSaveOrder(o);
@@ -2762,8 +2919,10 @@ async function mpRemoveSub(moId, soId) {
 
 async function mpReleaseOrder(moId) {
   const o = MP.orders.find(x=>x.id===moId);
-  const invalid = (o?.subs||[]).filter(s=>!s.machine||!s.planDate||!s.qty);
-  if (invalid.length) { showToast('Assign machine, date and qty to all components before releasing.','error'); return; }
+  const invalid = (o?.subs||[]).filter(s=>!s.machine||!s.planDate||!(s.qty>0));
+  if (invalid.length) {
+    showToast('Assign machine, date and qty to all components before releasing.','error'); return;
+  }
   (o.subs||[]).forEach(s=>{ if(s.status==='draft') s.status='released'; });
   o.status = 'released';
   await mpSaveOrder(o);
@@ -2786,27 +2945,24 @@ async function mpDeleteOrder(moId) {
 }
 
 async function mpSendToAssembly(moId, soId) {
-  const o = MP.orders.find(x=>x.id===moId);
-  const s = (o?.subs||[]).find(x=>x.id===soId);
+  const o   = MP.orders.find(x=>x.id===moId);
+  const s   = (o?.subs||[]).find(x=>x.id===soId);
   const inp = document.getElementById('send-'+soId);
   const qty = parseInt(inp?.value)||0;
-  if (qty<1) { showToast('Enter quantity to send.','error'); return; }
-  if (qty > s.done-s.sentQty) { showToast(`Cannot send more than available (${s.done-s.sentQty}).`,'error'); return; }
-  s.sentQty += qty;
-  if (s.done>=s.qty && s.sentQty>=s.done) s.status='complete';
+  const avail = (s.done||0)-(s.sentQty||0);
+  if (qty<1)       { showToast('Enter quantity to send.','error'); return; }
+  if (qty > avail) { showToast(`Cannot send more than available (${avail}).`,'error'); return; }
+  s.sentQty = (s.sentQty||0) + qty;
+  if ((s.done||0)>=s.qty && s.sentQty>=(s.done||0)) s.status='complete';
   mpCheckOrderStatus(moId);
-
-  // Write to stockMovements for Assembly team to see
   const moveId = 'SM-'+Date.now();
   await db.ref(`stockMovements/${moveId}`).set({
-    id: moveId,
-    moId, soId,
-    cl: o.cl, project: o.project, item: s.item,
-    qty, sentAt: new Date().toISOString(),
-    sentBy: currentProfile?.userId||'planner',
-    status: 'sent-assembly',
+    id:moveId, moId, soId,
+    cl:o.cl, project:o.project, item:s.item, qty,
+    sentAt:new Date().toISOString(),
+    sentBy:currentProfile?.userId||'planner',
+    status:'sent-assembly',
   });
-
   await mpSaveOrder(o);
   showToast(`${qty} ${s.item} sent to assembly.`,'success');
   mpRenderTab();
@@ -2828,8 +2984,7 @@ function mpRenderVerify(c) {
     c.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><p>No sessions pending verification.</p></div>`;
     return;
   }
-
-  c.innerHTML = pv.map(sess => {
+  c.innerHTML = pv.map(sess=>{
     const o = MP.orders.find(x=>x.id===sess.moId);
     const s = (o?.subs||[]).find(x=>x.id===sess.soId);
     return `
@@ -2843,10 +2998,10 @@ function mpRenderVerify(c) {
           </div>
           ${mpStBadge('pending-verify')}
         </div>
-        <div class="metrics-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">
           <div class="metric-box"><div class="lbl">Completed</div><div class="val" style="color:var(--success)">${sess.qty}</div></div>
-          <div class="metric-box"><div class="lbl">Rejected</div><div class="val" style="color:var(--danger)">${sess.rej}</div></div>
-          <div class="metric-box"><div class="lbl">Remaining</div><div class="val">${s?Math.max(0,s.qty-s.done-sess.qty):'—'}</div></div>
+          <div class="metric-box"><div class="lbl">Rejected</div><div class="val" style="color:var(--danger)">${sess.rej||0}</div></div>
+          <div class="metric-box"><div class="lbl">Remaining</div><div class="val">${s?Math.max(0,s.qty-(s.done||0)-sess.qty):'—'}</div></div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="mpApprove('${sess.id}')">✅ Approve → FG</button>
@@ -2865,8 +3020,8 @@ async function mpApprove(sessId) {
   const o = MP.orders.find(x=>x.id===sess.moId);
   const s = (o?.subs||[]).find(x=>x.id===sess.soId);
   if (s) {
-    s.done += sess.qty;
-    s.rej  += sess.rej||0;
+    s.done = (s.done||0) + sess.qty;
+    s.rej  = (s.rej||0) + (sess.rej||0);
     s.pendingDone = Math.max(0,(s.pendingDone||0)-sess.qty);
     s.status = 'complete';
   }
@@ -2883,8 +3038,6 @@ async function mpApproveRoute(sessId) {
   const o = MP.orders.find(x=>x.id===sess.moId);
   const s = (o?.subs||[]).find(x=>x.id===sess.soId);
   const remaining = s ? Math.max(0,s.qty-(s.done||0)-sess.qty-(s.rej||0)) : 0;
-
-  const machOpts = MP.machines.map(m=>`<option value="${m.name}">${m.name} (${m.machId})</option>`).join('');
   const today = new Date().toISOString().slice(0,10);
 
   document.getElementById('user-modal-overlay').classList.add('open');
@@ -2895,7 +3048,7 @@ async function mpApproveRoute(sessId) {
     <div class="al al-info">Approve ${sess.qty} pcs. Route remaining ${remaining} pcs to another machine.</div>
     <div class="form-group" style="margin-top:12px">
       <label class="form-label">Route to Machine</label>
-      <select class="form-input" id="rt-m"><option value="">Select</option>${machOpts}</select>
+      <select class="form-input" id="rt-m"><option value="">Select</option>${mpMachineOpts('')}</select>
     </div>
     <div class="form-group">
       <label class="form-label">Plan Date</label>
@@ -2915,13 +3068,12 @@ async function mpDoRoute(sessId) {
   const date = document.getElementById('rt-d')?.value;
   const qty  = parseInt(document.getElementById('rt-q')?.value)||0;
   if (!mach||!date||qty<1) { showToast('Fill all fields.','error'); return; }
-
   const sess = MP.sessions.find(x=>x.id===sessId);
   sess.status = 'approved';
   const o = MP.orders.find(x=>x.id===sess.moId);
   const s = (o?.subs||[]).find(x=>x.id===sess.soId);
   if (s) {
-    s.done += sess.qty;
+    s.done = (s.done||0)+sess.qty;
     s.pendingDone = Math.max(0,(s.pendingDone||0)-sess.qty);
     s.status = 'partial';
   }
@@ -2930,7 +3082,7 @@ async function mpDoRoute(sessId) {
     o.subs.push({
       id:'SO'+Date.now(), item:(s?.item||'')+' (Routed)', qty, done:0, pendingDone:0, rej:0, sentQty:0,
       planDate:date, machine:mach, seq:(o.subs.length+1), status:'released',
-      matQty:0, matRemarks:'Routed from '+sess.machType, matBy:'', matUpdated:'',
+      matQty:0, matRemarks:'Routed from '+(sess.machType||''), matBy:'', matUpdated:'',
     });
     await mpSaveOrder(o);
   }
@@ -2953,19 +3105,58 @@ async function mpReject(sessId) {
   await mpRefresh();
 }
 
+// ── ALERTS TAB ─────────────────────────────────
+function mpRenderAlerts(c) {
+  if (!MP.alerts.length) {
+    c.innerHTML = `<div class="empty-state"><div class="empty-icon">🔔</div><p>No alerts.</p></div>`;
+    return;
+  }
+  const sorted = [...MP.alerts].sort((a,b)=>(b.ts||'')>(a.ts||'')?1:-1);
+  c.innerHTML = sorted.map(a=>`
+    <div class="card" style="margin-bottom:10px;border-left:4px solid ${a.read?'#e5e7eb':a.type==='no-material'?'var(--warning)':'var(--info)'}">
+      <div style="padding:12px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+          <div style="font-size:13px;font-weight:700">
+            ${a.type==='no-order'?'🏭 No Orders Assigned':a.type==='no-material'?'📦 Material Short':'🔔 Alert'}
+            ${!a.read?'<span class="sbadge sb-released" style="margin-left:6px">NEW</span>':''}
+          </div>
+          <div style="display:flex;gap:6px">
+            ${!a.read?`<button class="btn btn-ghost btn-sm" onclick="mpMarkAlertRead('${a.id}')">Mark Read</button>`:''}
+            <button class="btn btn-danger btn-sm" onclick="mpDeleteAlert('${a.id}')">✕</button>
+          </div>
+        </div>
+        <div style="font-size:13px;margin-bottom:4px">${a.message}</div>
+        <div style="font-size:11px;color:var(--slate)">
+          From: <strong>${a.from}</strong>${a.cl?' · CL: '+a.cl:''} · ${a.ts||''}
+        </div>
+        ${a.type==='no-order'?`<button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="mpTab('orders',null)">📅 Go to Orders</button>`:''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function mpMarkAlertRead(aid) {
+  const a = MP.alerts.find(x=>x.id===aid);
+  if (a) { a.read=true; await mpSaveAlert(a); mpRenderTab(); }
+}
+
+async function mpDeleteAlert(aid) {
+  await MP.alertsRef().child(aid).remove();
+  MP.alerts = MP.alerts.filter(x=>x.id!==aid);
+  mpRenderTab();
+}
+
 // ── WIP TAB ────────────────────────────────────
 function mpRenderWip(c) {
-  const wipOrders = MP.orders.filter(o=>o.status==='wip'||o.status==='ready-assembly'||o.status==='transferred');
+  const wipOrders = MP.orders.filter(o=>o.status==='wip'||o.status==='transferred');
   if (!wipOrders.length) {
     c.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><p>No WIP orders yet.</p></div>`;
     return;
   }
-
-  c.innerHTML = wipOrders.map(o => {
+  c.innerHTML = wipOrders.map(o=>{
     const isWip = o.status==='wip';
-    const borderColor = isWip?'var(--success)':o.status==='transferred'?'var(--info)':'var(--gold)';
     return `
-      <div class="card" style="margin-bottom:12px;border-left:4px solid ${borderColor}">
+      <div class="card" style="margin-bottom:12px;border-left:4px solid ${isWip?'var(--success)':'var(--info)'}">
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
           <span>${o.cl} — ${o.project}</span>
           <div style="display:flex;gap:6px;align-items:center">
@@ -2974,7 +3165,9 @@ function mpRenderWip(c) {
           </div>
         </div>
         <div style="padding:12px 16px">
-          <div style="font-size:12px;color:var(--slate);margin-bottom:10px">PI: ${o.pi} · ${o.boqName} / ${o.typologyName}</div>
+          <div style="font-size:12px;color:var(--slate);margin-bottom:10px">
+            PI: ${o.pi||'—'} · ${o.scope||'—'} → ${o.boqName||'—'} → ${o.typologyName||'—'}
+          </div>
           <div style="display:flex;flex-wrap:wrap;gap:8px">
             ${(o.subs||[]).map(s=>`
               <div class="metric-box" style="padding:10px 14px;min-width:120px">
@@ -3033,9 +3226,8 @@ async function mpSetMachStatus(mid, status) {
 }
 
 function mpOpenDT(mid) {
-  const opts = MP.machines.map(m=>`<option value="${m.id}"${mid===m.id?' selected':''}>${m.name} (${m.machId})</option>`).join('');
-  const reasons = MP.settings.dtr.map(r=>`<option>${r}</option>`).join('');
-
+  const opts    = MP.machines.map(m=>`<option value="${m.id}"${mid===m.id?' selected':''}>${m.name} (${m.machId})</option>`).join('');
+  const reasons = (MP.settings.dtr||[]).map(r=>`<option>${r}</option>`).join('');
   document.getElementById('user-modal-overlay').classList.add('open');
   document.getElementById('modal-title').textContent = 'Log Downtime';
   document.getElementById('modal-pwd-group').style.display = 'none';
@@ -3063,7 +3255,7 @@ async function mpSaveDT() {
   const r   = document.getElementById('dt-r')?.value;
   const n   = document.getElementById('dt-n')?.value;
   const m   = MP.machines.find(x=>x.id===mid);
-  if (m) { m.status='downtime'; m.job=r; await mpSaveMachine(m); }
+  if (m) { m.status='downtime'; m.job=r+(n?': '+n:''); await mpSaveMachine(m); }
   closeUserModal();
   showToast('Downtime logged.','info');
   mpRenderTab();
@@ -3093,7 +3285,7 @@ function mpRenderHistory(c) {
                 <td style="font-size:12px">${s.project}</td>
                 <td style="font-size:12px">${s.machType} (${s.machId})</td>
                 <td style="color:var(--success);font-weight:700">${s.qty}</td>
-                <td style="color:${s.rej>0?'var(--danger)':'var(--slate)'}">${s.rej}</td>
+                <td style="color:${(s.rej||0)>0?'var(--danger)':'var(--slate)'}">${s.rej||0}</td>
                 <td style="font-size:12px">${s.op}</td>
                 <td style="font-size:11px;color:var(--slate)">${s.ts}</td>
                 <td>${mpStBadge(s.status)}</td>
@@ -3106,88 +3298,379 @@ function mpRenderHistory(c) {
   `;
 }
 
-// ── SETTINGS TAB ───────────────────────────────
+// ── SETTINGS TAB (full master data) ────────────
 function mpRenderSettings(c) {
-  const mkTags = (arr, key, placeholder) => `
-    <div class="settings-section">
-      <h3>${placeholder}</h3>
-      <div class="tag-list" id="tags-${key}">
-        ${arr.map((item,i)=>`
-          <div class="tag-item">
-            ${typeof item==='object'?`${item.name} (${item.code})`:item}
-            <span class="tag-remove" onclick="mpRemoveSetting('${key}',${i})">✕</span>
-          </div>
-        `).join('')}
-      </div>
-      <div class="tag-add">
-        <input class="form-input" id="add-${key}" type="text" placeholder="Add new..." style="max-width:250px">
-        ${key==='projects'?`<input class="form-input" id="add-${key}-code" type="text" placeholder="Code (e.g. MT-001)" style="max-width:140px">`:''}
-        <button class="btn btn-primary btn-sm" onclick="mpAddSetting('${key}')">+ Add</button>
-      </div>
+  const chip = (val, key, idx) => `
+    <div class="tag-item">
+      ${typeof val==='object' ? `${val.name} <span style="font-size:10px;opacity:0.7">(${val.code||val.scope||val.boqId||''})</span>` : val}
+      <span class="tag-remove" onclick="mpRemoveSettingItem('${key}',${idx})">✕</span>
     </div>
   `;
+
+  const boqOpts = (MP.settings.boqs||[]).map(b=>`<option value="${b.id}">${b.name}</option>`).join('');
+  const scopeOptsForBoq = (MP.settings.scopes||[]).map(s=>`<option>${s}</option>`).join('');
+  const itemCheckboxes = (MP.settings.items||[]).map(it=>`
+    <label style="display:flex;align-items:center;gap:7px;font-size:13px;margin-bottom:6px;cursor:pointer">
+      <input type="checkbox" class="typ-item-chk" value="${it}"> ${it}
+    </label>
+  `).join('');
 
   c.innerHTML = `
-    ${mkTags(MP.settings.cls,      'cls',      'CL Numbers')}
-    ${mkTags(MP.settings.projects, 'projects', 'Projects')}
-    ${mkTags(MP.settings.items,    'items',    'Items / Components')}
-    ${mkTags(MP.settings.dtr,      'dtr',      'Downtime Reasons')}
-    <div class="settings-section">
-      <h3>Machines</h3>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Name</th><th>Machine ID</th><th></th></tr></thead>
-          <tbody>
-            ${MP.settings.machines.map((m,i)=>`
-              <tr>
-                <td>${m.name}</td>
-                <td>${m.machId}</td>
-                <td><button class="btn btn-danger btn-sm" onclick="mpRemoveSetting('machines',${i})">✕</button></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div>
+        <!-- Projects -->
+        <div class="settings-section">
+          <h3>Projects</h3>
+          <div class="tag-list">${(MP.settings.projects||[]).map((p,i)=>chip(p,'projects',i)).join('')}</div>
+          <div class="tag-add">
+            <input class="form-input" id="add-proj-name" placeholder="Project name" style="max-width:150px">
+            <input class="form-input" id="add-proj-code" placeholder="Code" style="max-width:90px">
+            <button class="btn btn-primary btn-sm" onclick="mpAddProject()">+ Add</button>
+          </div>
+        </div>
+
+        <!-- CL Numbers -->
+        <div class="settings-section">
+          <h3>CL Numbers</h3>
+          <div class="tag-list">${(MP.settings.cls||[]).map((v,i)=>chip(v,'cls',i)).join('')}</div>
+          <div class="tag-add">
+            <input class="form-input" id="add-cls" placeholder="e.g. CL-2025-005" style="max-width:220px">
+            <button class="btn btn-primary btn-sm" onclick="mpAddSimple('cls','add-cls')">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Scopes -->
+        <div class="settings-section">
+          <h3>Scopes</h3>
+          <div class="tag-list">${(MP.settings.scopes||[]).map((v,i)=>chip(v,'scopes',i)).join('')}</div>
+          <div class="tag-add">
+            <input class="form-input" id="add-scope" placeholder="e.g. Facade" style="max-width:200px">
+            <button class="btn btn-primary btn-sm" onclick="mpAddSimple('scopes','add-scope')">+ Add</button>
+          </div>
+        </div>
+
+        <!-- BOQs -->
+        <div class="settings-section">
+          <h3>BOQs <span style="font-size:11px;font-weight:400;color:var(--slate)">(linked to Scope)</span></h3>
+          <div class="tag-list">${(MP.settings.boqs||[]).map((b,i)=>chip(b,'boqs',i)).join('')}</div>
+          <div class="tag-add" style="flex-wrap:wrap;gap:6px">
+            <input class="form-input" id="add-boq-name" placeholder="BOQ name" style="max-width:130px">
+            <select class="form-input" id="add-boq-scope" style="max-width:130px">${scopeOptsForBoq}</select>
+            <button class="btn btn-primary btn-sm" onclick="mpAddBoq()">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Typologies -->
+        <div class="settings-section">
+          <h3>Typologies <span style="font-size:11px;font-weight:400;color:var(--slate)">(linked to BOQ)</span></h3>
+          <div class="tag-list">${(MP.settings.typologies||[]).map((t,i)=>{
+            const b=(MP.settings.boqs||[]).find(x=>x.id===t.boqId);
+            return `<div class="tag-item">${t.name} <span style="font-size:10px;opacity:0.7">${b?b.name:'?'} · ${(t.items||[]).length} items</span><span class="tag-remove" onclick="mpRemoveSettingItem('typologies',${i})">✕</span></div>`;
+          }).join('')}</div>
+          <div style="font-size:12px;color:var(--slate);margin-bottom:8px">Name + BOQ + select default components:</div>
+          <div class="tag-add" style="flex-wrap:wrap;gap:6px;margin-bottom:8px">
+            <input class="form-input" id="add-typ-name" placeholder="Typology name" style="max-width:140px">
+            <select class="form-input" id="add-typ-boq" style="max-width:130px">${boqOpts}</select>
+          </div>
+          <div style="max-height:160px;overflow-y:auto;border:1.5px solid var(--light-gold);border-radius:8px;padding:10px;margin-bottom:8px">
+            ${itemCheckboxes}
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="mpAddTypology()">+ Add Typology</button>
+        </div>
       </div>
-      <div class="tag-add" style="margin-top:12px">
-        <input class="form-input" id="add-machines-name" type="text" placeholder="Machine name" style="max-width:150px">
-        <input class="form-input" id="add-machines-id"   type="text" placeholder="Machine ID (e.g. MCH-006)" style="max-width:180px">
-        <button class="btn btn-primary btn-sm" onclick="mpAddSetting('machines')">+ Add</button>
+
+      <div>
+        <!-- Items -->
+        <div class="settings-section">
+          <h3>Component Items</h3>
+          <div class="tag-list">${(MP.settings.items||[]).map((v,i)=>chip(v,'items',i)).join('')}</div>
+          <div class="tag-add">
+            <input class="form-input" id="add-item" placeholder="e.g. End Cap" style="max-width:200px">
+            <button class="btn btn-primary btn-sm" onclick="mpAddSimple('items','add-item')">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Batch -->
+        <div class="settings-section">
+          <h3>Batch Numbers</h3>
+          <div class="tag-list">${(MP.settings.batch||[]).map((v,i)=>chip(v,'batch',i)).join('')}</div>
+          <div class="tag-add">
+            <input class="form-input" id="add-batch" placeholder="e.g. Batch 4" style="max-width:200px">
+            <button class="btn btn-primary btn-sm" onclick="mpAddSimple('batch','add-batch')">+ Add</button>
+          </div>
+        </div>
+
+        <!-- PI Numbers -->
+        <div class="settings-section">
+          <h3>PI Numbers</h3>
+          <div class="tag-list">${(MP.settings.pi||[]).map((v,i)=>chip(v,'pi',i)).join('')}</div>
+          <div class="tag-add">
+            <input class="form-input" id="add-pi" placeholder="e.g. PI-2026-001" style="max-width:200px">
+            <button class="btn btn-primary btn-sm" onclick="mpAddSimple('pi','add-pi')">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Downtime Reasons -->
+        <div class="settings-section">
+          <h3>Downtime Reasons</h3>
+          <div class="tag-list">${(MP.settings.dtr||[]).map((v,i)=>chip(v,'dtr',i)).join('')}</div>
+          <div class="tag-add">
+            <input class="form-input" id="add-dtr" placeholder="e.g. Power Cut" style="max-width:200px">
+            <button class="btn btn-primary btn-sm" onclick="mpAddSimple('dtr','add-dtr')">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Machine Types & Units -->
+        <div class="settings-section">
+          <h3>Machine Types & Units</h3>
+          ${(MP.settings.machineTypes||[]).map((mt,mti)=>`
+            <div style="background:#f9f9f9;border:1px solid var(--light-gold);border-radius:9px;margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--light-gold);border-radius:9px 9px 0 0">
+                <div style="font-size:13px;font-weight:700">${mt.name} <span class="sbadge sb-draft">${(mt.units||[]).length} units</span></div>
+                <button class="btn btn-danger btn-sm" onclick="mpRemoveMachType(${mti})">Delete Type</button>
+              </div>
+              <div style="padding:10px 12px">
+                <div class="tag-list">${(mt.units||[]).map((u,ui)=>`<div class="tag-item">${u}<span class="tag-remove" onclick="mpRemoveMachUnit(${mti},${ui})">✕</span></div>`).join('')}</div>
+                <div class="tag-add">
+                  <input class="form-input" id="add-mu-${mti}" placeholder="Unit ID (e.g. MCH-006)" style="max-width:180px">
+                  <button class="btn btn-primary btn-sm" onclick="mpAddMachUnit(${mti})">+ Add Unit</button>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+          <div class="tag-add" style="margin-top:8px">
+            <input class="form-input" id="add-mtype" placeholder="New machine type name" style="max-width:220px">
+            <button class="btn btn-primary btn-sm" onclick="mpAddMachType()">+ Add Type</button>
+          </div>
+        </div>
       </div>
     </div>
   `;
 }
 
-async function mpAddSetting(key) {
-  if (key==='projects') {
-    const name = document.getElementById('add-projects')?.value.trim();
-    const code = document.getElementById('add-projects-code')?.value.trim();
-    if (!name||!code) { showToast('Enter project name and code.','error'); return; }
-    MP.settings.projects.push({name,code});
-  } else if (key==='machines') {
-    const name  = document.getElementById('add-machines-name')?.value.trim();
-    const machId = document.getElementById('add-machines-id')?.value.trim();
-    if (!name||!machId) { showToast('Enter machine name and ID.','error'); return; }
-    const newM = {id:'m'+Date.now(), name, machId, status:'idle', job:'', prog:0};
-    MP.settings.machines.push(newM);
-    MP.machines.push(newM);
-    await mpSaveMachine(newM);
-  } else {
-    const val = document.getElementById(`add-${key}`)?.value.trim();
-    if (!val) { showToast('Enter a value.','error'); return; }
-    if (!MP.settings[key]) MP.settings[key]=[];
-    MP.settings[key].push(val);
-  }
-  await mpSaveSettings();
-  showToast('Saved.','success');
-  mpRenderTab();
+// Settings operations
+async function mpAddProject() {
+  const name = document.getElementById('add-proj-name')?.value.trim();
+  const code = document.getElementById('add-proj-code')?.value.trim();
+  if (!name||!code) { showToast('Enter project name and code.','error'); return; }
+  if (!MP.settings.projects) MP.settings.projects=[];
+  MP.settings.projects.push({name,code});
+  await mpSaveSettings(); showToast('Project added.','success'); mpRenderTab();
 }
 
-async function mpRemoveSetting(key, idx) {
+async function mpAddSimple(key, inputId) {
+  const val = document.getElementById(inputId)?.value.trim();
+  if (!val) { showToast('Enter a value.','error'); return; }
+  if (!MP.settings[key]) MP.settings[key]=[];
+  MP.settings[key].push(val);
+  await mpSaveSettings(); showToast('Added.','success'); mpRenderTab();
+}
+
+async function mpAddBoq() {
+  const name  = document.getElementById('add-boq-name')?.value.trim();
+  const scope = document.getElementById('add-boq-scope')?.value;
+  if (!name||!scope) { showToast('Enter BOQ name and select scope.','error'); return; }
+  if (!MP.settings.boqs) MP.settings.boqs=[];
+  MP.settings.boqs.push({id:'b'+Date.now(), name, scope});
+  await mpSaveSettings(); showToast('BOQ added.','success'); mpRenderTab();
+}
+
+async function mpAddTypology() {
+  const name  = document.getElementById('add-typ-name')?.value.trim();
+  const boqId = document.getElementById('add-typ-boq')?.value;
+  if (!name||!boqId) { showToast('Enter typology name and select BOQ.','error'); return; }
+  const checked = [...document.querySelectorAll('.typ-item-chk:checked')].map(c=>c.value);
+  if (!checked.length) { showToast('Select at least one component item.','error'); return; }
+  if (!MP.settings.typologies) MP.settings.typologies=[];
+  MP.settings.typologies.push({id:'t'+Date.now(), name, boqId, items:checked});
+  await mpSaveSettings(); showToast('Typology added.','success'); mpRenderTab();
+}
+
+async function mpAddMachType() {
+  const name = document.getElementById('add-mtype')?.value.trim();
+  if (!name) { showToast('Enter machine type name.','error'); return; }
+  if (!MP.settings.machineTypes) MP.settings.machineTypes=[];
+  MP.settings.machineTypes.push({id:'mt'+Date.now(), name, units:[]});
+  await mpSaveSettings(); showToast('Machine type added.','success'); mpRenderTab();
+}
+
+async function mpAddMachUnit(mti) {
+  const inp = document.getElementById(`add-mu-${mti}`);
+  const val = inp?.value.trim();
+  if (!val) { showToast('Enter unit ID.','error'); return; }
+  if (!MP.settings.machineTypes[mti].units) MP.settings.machineTypes[mti].units=[];
+  MP.settings.machineTypes[mti].units.push(val);
+  // Also add to machines in Firebase
+  const mt = MP.settings.machineTypes[mti];
+  const id = `${mt.id}_${val}`;
+  const m  = {id, name:mt.name, machId:val, status:'idle', job:'', prog:0};
+  await mpSaveMachine(m);
+  MP.machines.push(m);
+  await mpSaveSettings(); showToast('Unit added.','success'); mpRenderTab();
+}
+
+async function mpRemoveSettingItem(key, idx) {
   if (!confirm('Remove this item?')) return;
   MP.settings[key].splice(idx,1);
-  await mpSaveSettings();
-  showToast('Removed.','success');
-  mpRenderTab();
+  await mpSaveSettings(); showToast('Removed.','success'); mpRenderTab();
+}
+
+async function mpRemoveMachType(mti) {
+  if (!confirm('Delete this machine type and all its units?')) return;
+  MP.settings.machineTypes.splice(mti,1);
+  await mpSaveSettings(); showToast('Removed.','success'); mpRenderTab();
+}
+
+async function mpRemoveMachUnit(mti, ui) {
+  if (!confirm('Remove this unit?')) return;
+  MP.settings.machineTypes[mti].units.splice(ui,1);
+  await mpSaveSettings(); showToast('Removed.','success'); mpRenderTab();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MATERIAL MODULE
+// ═══════════════════════════════════════════════════════════
+async function renderMaterial(content) {
+  content.innerHTML = `<div class="spinner"></div>`;
+  await mpLoadAll();
+
+  const opName = currentProfile?.displayName || currentProfile?.userId || 'Material Handler';
+
+  let h = `
+    <button class="btn-back" onclick="renderHome()">← Back to Home</button>
+    <div class="panel-header">
+      <div class="panel-title">📦 <span>Material</span></div>
+      <div style="font-size:13px;color:var(--slate)">Handler: <strong>${opName}</strong></div>
+    </div>
+    <div class="al al-info" style="margin-bottom:16px">Select a CL order to view and update material availability for each component.</div>
+  `;
+
+  const activeOrders = MP.orders.filter(o=>o.status!=='transferred'&&o.status!=='draft');
+
+  if (!activeOrders.length) {
+    h += `<div class="empty-state"><div class="empty-icon">📦</div><p>No released orders to update material for.</p></div>`;
+  } else {
+    activeOrders.forEach(o => {
+      const mFull = (o.subs||[]).filter(s=>(s.matQty||0)>=(s.qty||1)).length;
+      const tot   = (o.subs||[]).length;
+      const badge = mFull===tot && tot>0
+        ? '<span class="sbadge sb-approved">✅ Full</span>'
+        : mFull>0
+          ? '<span class="sbadge sb-pending">⚠ Partial</span>'
+          : '<span class="sbadge sb-rejected">❌ Missing</span>';
+      h += `
+        <div class="mo-card ${o.priority?'urgent':''}" onclick="mpRenderMatDetail(document.getElementById('app-content'),'${o.id}')">
+          <div class="mo-hdr">
+            <div>
+              <div class="mo-cl">${o.cl} ${o.priority?'<span class="sbadge sb-urgent">🔥</span>':''}</div>
+              <div class="mo-project">${o.project} · ${o.pi||'—'} · ${o.batch||'—'}</div>
+              <div style="font-size:12px;color:var(--slate)">${tot} components</div>
+            </div>
+            ${badge}
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  content.innerHTML = h;
+}
+
+async function mpRenderMatDetail(content, moId) {
+  const o = MP.orders.find(x=>x.id===moId);
+  if (!o) return;
+  const opName = currentProfile?.displayName || currentProfile?.userId || 'Material Handler';
+
+  let h = `
+    <button class="btn-back" onclick="renderMaterial(document.getElementById('app-content'))">← All Orders</button>
+    <div class="panel-header">
+      <div class="panel-title">📦 <span>${o.cl} — Material</span></div>
+    </div>
+    <div class="card" style="margin-bottom:16px;padding:12px 16px">
+      <div style="font-size:14px;font-weight:700">${o.cl}</div>
+      <div style="font-size:12px;color:var(--slate);margin-top:3px">${o.project} · ${o.pi||'—'} · ${o.batch||'—'}</div>
+    </div>
+  `;
+
+  (o.subs||[]).forEach(s => {
+    h += `
+      <div class="card" style="margin-bottom:10px;padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:15px;font-weight:700">${s.item}</div>
+            <div style="font-size:12px;color:var(--slate)">Machine: ${s.machine||'—'} · Date: ${s.planDate||'—'}</div>
+            ${s.matBy?`<div style="font-size:11px;color:var(--slate)">Updated by ${s.matBy} at ${s.matUpdated}</div>`:''}
+          </div>
+          <div>
+            ${mpMatBadge(s)}
+            <div style="font-size:12px;color:var(--slate);margin-top:4px">Required: <strong>${s.qty}</strong></div>
+          </div>
+        </div>
+        ${s.matRemarks?`<div style="font-size:12px;color:var(--navy);margin-bottom:8px">📝 ${s.matRemarks}</div>`:''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="mpOpenMatEntry('${o.id}','${s.id}')">✏ Update Material</button>
+          ${(s.matQty||0)<s.qty?`<button class="btn btn-danger btn-sm" onclick="mpMatAlert('${o.id}','${s.id}')">🔔 Alert Planner</button>`:''}
+        </div>
+      </div>
+    `;
+  });
+
+  content.innerHTML = h;
+}
+
+function mpOpenMatEntry(moId, soId) {
+  const o = MP.orders.find(x=>x.id===moId);
+  const s = (o?.subs||[]).find(x=>x.id===soId);
+  if (!s) return;
+  document.getElementById('user-modal-overlay').classList.add('open');
+  document.getElementById('modal-title').textContent = `Update Material — ${s.item}`;
+  document.getElementById('modal-pwd-group').style.display = 'none';
+  document.getElementById('actions-grid').style.display = 'none';
+  document.querySelector('.modal-body').innerHTML = `
+    <div class="al al-info" style="margin-bottom:12px">Planned qty: <strong>${s.qty}</strong> on <strong>${s.machine||'—'}</strong></div>
+    <div class="form-group">
+      <label class="form-label">Available Qty at Machine</label>
+      <input class="form-input" type="number" id="mq-qty" value="${s.matQty||0}" min="0">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Remarks</label>
+      <textarea class="form-input" id="mq-rem" style="height:60px;resize:none">${s.matRemarks||''}</textarea>
+    </div>
+  `;
+  document.getElementById('modal-save-btn').textContent = 'Save';
+  document.getElementById('modal-save-btn').onclick = () => mpSaveMatEntry(moId, soId);
+}
+
+async function mpSaveMatEntry(moId, soId) {
+  const o   = MP.orders.find(x=>x.id===moId);
+  const s   = (o?.subs||[]).find(x=>x.id===soId);
+  if (!s) return;
+  s.matQty     = parseInt(document.getElementById('mq-qty')?.value)||0;
+  s.matRemarks = document.getElementById('mq-rem')?.value||'';
+  s.matBy      = currentProfile?.displayName || currentProfile?.userId || 'Handler';
+  s.matUpdated = mpTs();
+  await mpSaveOrder(o);
+  closeUserModal();
+  showToast('Material updated.','success');
+  mpRenderMatDetail(document.getElementById('app-content'), moId);
+}
+
+async function mpMatAlert(moId, soId) {
+  const o = MP.orders.find(x=>x.id===moId);
+  const s = (o?.subs||[]).find(x=>x.id===soId);
+  const opName = currentProfile?.displayName || currentProfile?.userId || 'Handler';
+  const alert = {
+    id: 'a'+Date.now(),
+    type: 'no-material',
+    from: opName,
+    cl: o.cl, item: s.item,
+    message: `Material short: ${s.item} (${o.cl}) — ${s.matQty||0}/${s.qty} available`,
+    ts: mpTs(),
+    read: false,
+  };
+  await mpSaveAlert(alert);
+  MP.alerts.push(alert);
+  showToast('Alert sent to planner.','success');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3197,18 +3680,16 @@ async function renderRun(content) {
   content.innerHTML = `<div class="spinner"></div>`;
   await mpLoadAll();
   MP.activeSession = null;
-  MP.timerSec = 0;
-  if (MP.timerInt) { clearInterval(MP.timerInt); MP.timerInt = null; }
+  MP.timerSec      = 0;
+  if (MP.timerInt) { clearInterval(MP.timerInt); MP.timerInt=null; }
   renderRunOrders(content);
 }
 
 function renderRunOrders(content) {
   const opName = currentProfile?.displayName || currentProfile?.userId || 'Operator';
+  const today  = new Date().toISOString().slice(0,10);
 
-  // Find orders with subs assigned to a machine for today
-  const today = new Date().toISOString().slice(0,10);
   const myJobs = [];
-
   MP.orders.forEach(o => {
     if (o.status==='draft') return;
     (o.subs||[]).forEach(s => {
@@ -3217,10 +3698,8 @@ function renderRunOrders(content) {
       }
     });
   });
-
   myJobs.sort((a,b)=>(a.s.seq||99)-(b.s.seq||99));
 
-  // Check for paused session by this user
   const myPaused = MP.sessions.filter(s=>s.status==='paused'&&s.op===opName);
 
   let h = `
@@ -3232,17 +3711,17 @@ function renderRunOrders(content) {
   `;
 
   if (myPaused.length) {
-    h += `<div class="al al-warn" style="margin-bottom:12px">⏸ ${myPaused.length} paused order${myPaused.length>1?'s':''} — see below to resume</div>`;
+    h += `<div class="al al-warn" style="margin-bottom:12px">⏸ ${myPaused.length} paused order${myPaused.length>1?'s':''} — resume below</div>`;
     myPaused.forEach(ps => {
       const o = MP.orders.find(x=>x.id===ps.moId);
       const s = (o?.subs||[]).find(x=>x.id===ps.soId);
       h += `
         <div class="run-job-card" style="border-color:var(--gold)">
-          <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
             <div>
               <div style="font-size:15px;font-weight:700">⏸ ${ps.item} ${mpStBadge('paused')}</div>
               <div style="font-size:12px;color:var(--slate)">${ps.cl} · ${ps.project}</div>
-              <div style="font-size:12px;color:var(--slate)">Done this run: <strong>${ps.qty}</strong> · Rejected: <strong>${ps.rej||0}</strong></div>
+              <div style="font-size:12px;color:var(--slate)">Done: <strong>${ps.qty}</strong> · Rejected: <strong>${ps.rej||0}</strong></div>
             </div>
             <button class="btn btn-primary" onclick="mpResumeRun('${ps.id}',document.getElementById('app-content'))">▶ Resume</button>
           </div>
@@ -3252,7 +3731,14 @@ function renderRunOrders(content) {
   }
 
   if (!myJobs.length && !myPaused.length) {
-    h += `<div class="empty-state"><div class="empty-icon">📭</div><p>No orders assigned to you for today.<br>Contact the planner if you think this is wrong.</p></div>`;
+    const aId = 'a'+Date.now();
+    h += `
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <p>No orders assigned to you for today.</p>
+        <button class="btn btn-secondary" style="margin-top:12px" onclick="mpSendNoOrderAlert()">🔔 Alert Planner</button>
+      </div>
+    `;
   } else {
     myJobs.forEach(({s,o}) => {
       const isPaused    = MP.sessions.some(ps=>ps.soId===s.id&&ps.status==='paused');
@@ -3261,16 +3747,18 @@ function renderRunOrders(content) {
       const pending = s.qty-(s.done||0)-(s.pendingDone||0)-(s.rej||0);
       const matLow  = (s.matQty||0) < s.qty;
       h += `
-        <div class="run-job-card ${o.priority?'urgent':''}" onclick="mpStartRun('${o.id}','${s.id}',document.getElementById('app-content'))">
-          <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="run-job-card ${o.priority?'urgent':''} ${matLow?'style="border-color:#fecaca"':''}"
+          onclick="mpStartRun('${o.id}','${s.id}',document.getElementById('app-content'))">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
             <div>
-              <div style="font-size:15px;font-weight:700">${s.item} ${o.priority?'<span class="sbadge sb-urgent">🔥 Urgent</span>':''}</div>
+              <div style="font-size:15px;font-weight:700">${s.item} ${o.priority?'<span class="sbadge sb-urgent">🔥</span>':''}</div>
               <div style="font-size:12px;color:var(--slate);margin-top:3px">${o.cl} · ${o.project}</div>
               <div style="font-size:12px;color:var(--slate)">Machine: <strong>${s.machine}</strong> · Seq: ${s.seq}</div>
-              ${mpMatBadge(s)}
+              <div style="margin-top:6px">${mpMatBadge(s)}</div>
+              ${matLow?`<button class="btn btn-danger btn-sm" style="margin-top:6px" onclick="event.stopPropagation();mpMatAlertFromRun('${o.id}','${s.id}')">🔔 Alert Planner</button>`:''}
             </div>
             <div style="text-align:right">
-              <div style="font-size:32px;font-weight:800;color:var(--info)">${pending}</div>
+              <div style="font-size:32px;font-weight:800;color:var(--info)">${Math.max(0,pending)}</div>
               <div style="font-size:11px;color:var(--slate)">pending</div>
             </div>
           </div>
@@ -3282,18 +3770,31 @@ function renderRunOrders(content) {
   content.innerHTML = h;
 }
 
+async function mpSendNoOrderAlert() {
+  const opName = currentProfile?.displayName || currentProfile?.userId || 'Operator';
+  const a = {
+    id:'a'+Date.now(), type:'no-order', from:opName, cl:'', item:'',
+    message:`No orders assigned today for ${opName}`,
+    ts:mpTs(), read:false,
+  };
+  await mpSaveAlert(a);
+  MP.alerts.push(a);
+  showToast('Alert sent to planner.','success');
+}
+
+async function mpMatAlertFromRun(moId, soId) {
+  await mpMatAlert(moId, soId);
+}
+
 function mpStartRun(moId, soId, content) {
   const o  = MP.orders.find(x=>x.id===moId);
   const s  = (o?.subs||[]).find(x=>x.id===soId);
   const op = currentProfile?.displayName || currentProfile?.userId || 'Operator';
-
+  const machParts = (s.machine||'').split('|');
   MP.activeSession = {
-    id: 'ms'+Date.now(),
-    soId, moId, item: s.item, cl: o.cl, project: o.project,
-    machType: s.machine, machId: s.machine,
-    qty: 0, rej: 0,
-    op, startEp: Date.now(), status: 'active',
-    ts: mpTsLong(),
+    id:'ms'+Date.now(), soId, moId, item:s.item, cl:o.cl, project:o.project,
+    machType: machParts[0]||s.machine, machId: machParts[1]||s.machine,
+    qty:0, rej:0, op, startEp:Date.now(), status:'active', ts:mpTsLong(),
   };
   MP.timerSec = 0;
   renderRunActive(content);
@@ -3303,30 +3804,32 @@ function mpResumeRun(sessId, content) {
   const ps = MP.sessions.find(x=>x.id===sessId);
   if (!ps) return;
   MP.activeSession = {...ps};
-  MP.timerSec = ps.elapsedSec || 0;
+  MP.timerSec = ps.elapsedSec||0;
   renderRunActive(content);
 }
 
 function renderRunActive(content) {
   const sess = MP.activeSession;
   if (!sess) { renderRunOrders(content); return; }
-
   const o = MP.orders.find(x=>x.id===sess.moId);
   const s = (o?.subs||[]).find(x=>x.id===sess.soId);
   const pending = s ? Math.max(0,s.qty-(s.done||0)-(s.pendingDone||0)-(s.rej||0)) : '—';
 
   content.innerHTML = `
-    <button class="btn-back" onclick="renderHome()">← Back to Home</button>
-
+    <button class="btn-back" onclick="mpStopRun(document.getElementById('app-content'))">← Back</button>
     <div class="card" style="margin-bottom:16px">
       <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
         <span>🔧 ${sess.item} — ${sess.cl}</span>
         ${mpStBadge('running')}
       </div>
       <div style="padding:16px">
-        <div style="font-size:13px;color:var(--slate);margin-bottom:4px">${sess.project}</div>
-        <div style="font-size:12px;color:var(--slate)">Machine: ${sess.machType} · Operator: ${sess.op}</div>
-        <div style="font-size:12px;color:var(--slate)">Planned: ${s?.qty||'—'} · Approved Done: ${s?.done||0} · Still Pending: ${pending}</div>
+        <div style="font-size:13px;color:var(--slate)">${sess.project}</div>
+        <div style="font-size:12px;color:var(--slate);margin-top:4px">
+          Machine: ${sess.machType} (${sess.machId}) · Operator: ${sess.op}
+        </div>
+        <div style="font-size:12px;color:var(--slate)">
+          Planned: ${s?.qty||'—'} · Approved Done: ${s?.done||0} · Still Pending: ${pending}
+        </div>
       </div>
     </div>
 
@@ -3347,7 +3850,7 @@ function renderRunActive(content) {
       <div style="font-size:40px;color:var(--light-gold);font-weight:300">|</div>
       <div class="counter-box">
         <div class="counter-label">Rejected</div>
-        <div class="counter-val rej" id="run-rej">${sess.rej}</div>
+        <div class="counter-val rej" id="run-rej">${sess.rej||0}</div>
         <div class="counter-btns">
           <button class="c-btn minus" onclick="mpAdj('rej',-1)">−</button>
           <button class="c-btn plus"  onclick="mpAdj('rej',1)">+</button>
@@ -3357,7 +3860,7 @@ function renderRunActive(content) {
 
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px">
       <button class="btn btn-secondary" onclick="mpPauseRun(document.getElementById('app-content'))">⏸ Pause</button>
-      <button class="btn btn-primary"   onclick="mpOpenSubmitRun(document.getElementById('app-content'))">📤 Submit for Verification</button>
+      <button class="btn btn-primary"   onclick="mpOpenSubmitRun(document.getElementById('app-content'))">📤 Submit</button>
       <button class="btn btn-danger"    onclick="mpStopRun(document.getElementById('app-content'))">⏹ Stop</button>
     </div>
   `;
@@ -3367,11 +3870,9 @@ function renderRunActive(content) {
 
 function mpStartRunTimer() {
   if (MP.timerInt) clearInterval(MP.timerInt);
-  MP.timerInt = setInterval(() => {
+  MP.timerInt = setInterval(()=>{
     MP.timerSec++;
-    const h = Math.floor(MP.timerSec/3600);
-    const m = Math.floor((MP.timerSec%3600)/60);
-    const s = MP.timerSec%60;
+    const h=Math.floor(MP.timerSec/3600), m=Math.floor((MP.timerSec%3600)/60), s=MP.timerSec%60;
     const el = document.getElementById('run-timer');
     if (el) el.textContent = `${mpPad(h)}:${mpPad(m)}:${mpPad(s)}`;
   }, 1000);
@@ -3384,7 +3885,7 @@ function mpAdj(field, delta) {
     const el = document.getElementById('run-done');
     if (el) el.textContent = MP.activeSession.qty;
   } else {
-    MP.activeSession.rej = Math.max(0, MP.activeSession.rej+delta);
+    MP.activeSession.rej = Math.max(0, (MP.activeSession.rej||0)+delta);
     const el = document.getElementById('run-rej');
     if (el) el.textContent = MP.activeSession.rej;
   }
@@ -3392,9 +3893,9 @@ function mpAdj(field, delta) {
 
 async function mpPauseRun(content) {
   if (!MP.activeSession) return;
-  clearInterval(MP.timerInt); MP.timerInt = null;
+  clearInterval(MP.timerInt); MP.timerInt=null;
   MP.activeSession.elapsedSec = MP.timerSec;
-  MP.activeSession.status = 'paused';
+  MP.activeSession.status     = 'paused';
   await mpSaveSession(MP.activeSession);
   MP.sessions.push({...MP.activeSession});
   MP.activeSession = null;
@@ -3403,24 +3904,25 @@ async function mpPauseRun(content) {
 }
 
 async function mpStopRun(content) {
-  if (!confirm('Stop order? Progress will be discarded.')) return;
-  clearInterval(MP.timerInt); MP.timerInt = null;
-  MP.activeSession = null;
+  if (MP.activeSession) {
+    if (!confirm('Stop order? Progress this session will be discarded.')) return;
+    clearInterval(MP.timerInt); MP.timerInt=null;
+    MP.activeSession = null;
+  }
   renderRunOrders(content);
 }
 
 function mpOpenSubmitRun(content) {
   const sess = MP.activeSession;
   if (!sess) return;
-
   document.getElementById('user-modal-overlay').classList.add('open');
   document.getElementById('modal-title').textContent = 'Submit for Verification';
   document.getElementById('modal-pwd-group').style.display = 'none';
   document.getElementById('actions-grid').style.display = 'none';
   document.querySelector('.modal-body').innerHTML = `
-    <div class="metrics-row" style="grid-template-columns:repeat(2,1fr);margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div class="metric-box"><div class="lbl">Completed</div><div class="val" style="color:var(--success)">${sess.qty}</div></div>
-      <div class="metric-box"><div class="lbl">Rejected</div><div class="val" style="color:var(--danger)">${sess.rej}</div></div>
+      <div class="metric-box"><div class="lbl">Rejected</div><div class="val" style="color:var(--danger)">${sess.rej||0}</div></div>
     </div>
     <div class="form-group">
       <label class="form-label">Notes for Planner (optional)</label>
@@ -3434,28 +3936,18 @@ function mpOpenSubmitRun(content) {
 async function mpDoSubmitRun(content) {
   const sess = MP.activeSession;
   if (!sess) return;
-  clearInterval(MP.timerInt); MP.timerInt = null;
-
-  const notes = document.getElementById('sub-notes')?.value || '';
-  const newSess = {
-    ...sess,
-    notes, ts: mpTsLong(),
-    status: 'pending-verify',
-    elapsedSec: MP.timerSec,
-  };
-
-  // Update sub-order pendingDone
+  clearInterval(MP.timerInt); MP.timerInt=null;
+  const notes = document.getElementById('sub-notes')?.value||'';
+  const newSess = {...sess, notes, ts:mpTsLong(), status:'pending-verify', elapsedSec:MP.timerSec};
   const o = MP.orders.find(x=>x.id===sess.moId);
   const s = (o?.subs||[]).find(x=>x.id===sess.soId);
   if (s) {
-    s.pendingDone = (s.pendingDone||0) + sess.qty;
+    s.pendingDone = (s.pendingDone||0)+sess.qty;
     if (s.status==='released'||s.status==='draft') s.status='partial';
   }
   mpCheckOrderStatus(sess.moId);
-
   await mpSaveSession(newSess);
   if (o) await mpSaveOrder(o);
-
   MP.sessions.push(newSess);
   MP.activeSession = null;
   closeUserModal();
@@ -3468,12 +3960,12 @@ async function mpDoSubmitRun(content) {
 const origCloseUserModal = closeUserModal;
 window.closeUserModal = function() {
   origCloseUserModal();
-  // Restore modal body for user management if needed
   document.getElementById('actions-grid').style.display = '';
   document.getElementById('modal-pwd-group').style.display = '';
   document.getElementById('modal-save-btn').textContent = 'Save User';
   document.getElementById('modal-save-btn').onclick = saveUser;
 };
+
 let resetTargetUid = null;
 
 function openPwdReset(uid, userId) {
