@@ -1187,6 +1187,20 @@
 <body>
 
 <!-- ══════════════════════════════════════════
+     AUTH LOADING OVERLAY (prevents login flash on refresh)
+══════════════════════════════════════════ -->
+<div id="auth-loading" style="
+  position:fixed;inset:0;
+  background:linear-gradient(135deg,#2c2c3e,#1a1a2e);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:9999;
+">
+  <div style="width:48px;height:48px;border:3px solid #d4af37;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite;margin-bottom:16px"></div>
+  <div style="color:#d4af37;font-size:14px;font-weight:600;letter-spacing:1px">Loading...</div>
+</div>
+
+<!-- ══════════════════════════════════════════
      SCREEN: LOGIN
 ══════════════════════════════════════════ -->
 <div id="screen-login" class="screen active">
@@ -1386,23 +1400,14 @@ const MODULES = [
     id: 'monitor',
     action: 'monitor',
     icon: '📺',
-    name: 'Monitor',
-    desc: 'Assembly line shift tracking, hourly targets and actuals',
+    name: 'Monitor & View Assembly',
+    desc: 'Assembly line shift tracking, hourly targets, actuals and live view',
     tag: 'assembly',
     tagLabel: 'Assembly',
   },
   {
-    id: 'view',
-    action: 'view',
-    icon: '👁',
-    name: 'Live View',
-    desc: 'Read-only display — for screens, TVs, and managers',
-    tag: 'shared',
-    tagLabel: 'All Departments',
-  },
-  {
     id: 'stock',
-    action: 'view', // stock visible to anyone with 'view'
+    action: 'view',
     icon: '🗃',
     name: 'Stock Available',
     desc: 'Parts completed in machine shop, ready for assembly lines',
@@ -1423,6 +1428,10 @@ let toastTimer   = null;
 //  AUTH STATE
 // ═══════════════════════════════════════════════════════════
 auth.onAuthStateChanged(async (user) => {
+  // Hide loading overlay once auth state is known
+  const loadingOverlay = document.getElementById('auth-loading');
+  if (loadingOverlay) loadingOverlay.style.display = 'none';
+
   if (user) {
     currentUser = user;
     try {
@@ -1430,7 +1439,6 @@ auth.onAuthStateChanged(async (user) => {
       currentProfile = snap.val();
 
       if (!currentProfile) {
-        // Auth account exists but no profile — treat as invalid
         await auth.signOut();
         showLogin();
         showError('Account not configured. Contact admin.');
@@ -1448,7 +1456,7 @@ auth.onAuthStateChanged(async (user) => {
       showLogin();
     }
   } else {
-    currentUser  = null;
+    currentUser    = null;
     currentProfile = null;
     showLogin();
   }
@@ -2127,10 +2135,11 @@ function closeUserModal() {
 function renderActionsGrid(currentActions) {
   const grid = document.getElementById('actions-grid');
   grid.innerHTML = ALL_ACTIONS.map(a => {
-    const checked = currentActions[a.id] ? 'checked' : '';
+    const isChecked = currentActions[a.id] ? true : false;
     return `
-      <label class="action-check ${checked}" id="ac-${a.id}" onclick="toggleAction('${a.id}')">
-        <input type="checkbox" ${checked}>
+      <label class="action-check ${isChecked?'checked':''}" id="ac-${a.id}"
+        onclick="event.preventDefault();toggleAction('${a.id}')">
+        <input type="checkbox" ${isChecked?'checked':''} tabindex="-1">
         <span class="check-dot"></span>
         ${a.label}
       </label>
@@ -2139,8 +2148,11 @@ function renderActionsGrid(currentActions) {
 }
 
 function toggleAction(id) {
-  const el = document.getElementById(`ac-${id}`);
+  const el  = document.getElementById(`ac-${id}`);
+  const inp = el?.querySelector('input[type="checkbox"]');
+  if (!el) return;
   el.classList.toggle('checked');
+  if (inp) inp.checked = el.classList.contains('checked');
 }
 
 // ─── Save user ───
@@ -2291,8 +2303,8 @@ const MP = {
 };
 
 // ── Utils ──────────────────────────────────────
-function mpTs()     { return new Date().toTimeString().slice(0,5); }
-function mpTsLong() { return new Date().toLocaleString('en-GB',{hour12:false}).slice(0,16); }
+function mpTs()     { return new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}); }
+function mpTsLong() { return new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}); }
 function mpPad(n)   { return n < 10 ? '0'+n : ''+n; }
 
 function mpStBadge(s) {
@@ -2663,8 +2675,8 @@ let mpCoItems = [];
 function mpOpenCreateOrder() {
   const scopeOpts = (MP.settings.scopes||[]).map(s=>`<option>${s}</option>`).join('');
   const batchOpts = (MP.settings.batch||[]).map(b=>`<option>${b}</option>`).join('');
-  const piOpts    = (MP.settings.pi||[]).map(p=>`<option>${p}</option>`).join('');
-  const clOpts    = (MP.settings.cls||[]).map(c=>`<option>${c}</option>`).join('');
+  const piOpts    = (MP.settings.pi||[]).map(p=>`<option value="${p}">`).join('');
+  const clOpts    = (MP.settings.cls||[]).map(c=>`<option value="${c}">`).join('');
   const projOpts  = (MP.settings.projects||[]).map(p=>`<option value="${p.name}" data-code="${p.code}">${p.name}</option>`).join('');
   const firstCode = (MP.settings.projects||[])[0]?.code || '';
 
@@ -2707,18 +2719,18 @@ function mpOpenCreateOrder() {
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
       <div class="form-group">
-        <label class="form-label">CL Number</label>
-        <select class="form-input" id="co-cl">
-          <option value="">Select CL</option>${clOpts}
-        </select>
+        <label class="form-label">CL Number <span style="font-size:10px;color:var(--slate)">(type to search)</span></label>
+        <input class="form-input" id="co-cl" list="cl-list" placeholder="Type or search CL..." autocomplete="off">
+        <datalist id="cl-list">${clOpts}</datalist>
       </div>
       <div class="form-group">
         <label class="form-label">Batch</label>
         <select class="form-input" id="co-batch">${batchOpts}</select>
       </div>
       <div class="form-group">
-        <label class="form-label">PI Number</label>
-        <select class="form-input" id="co-pi">${piOpts}</select>
+        <label class="form-label">PI Number <span style="font-size:10px;color:var(--slate)">(type to search)</span></label>
+        <input class="form-input" id="co-pi" list="pi-list" placeholder="Type or search PI..." autocomplete="off">
+        <datalist id="pi-list">${piOpts}</datalist>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -3510,15 +3522,60 @@ async function mpAddMachUnit(mti) {
 }
 
 async function mpRemoveSettingItem(key, idx) {
-  if (!confirm('Remove this item?')) return;
-  MP.settings[key].splice(idx,1);
-  await mpSaveSettings(); showToast('Removed.','success'); mpRenderTab();
+  const item = MP.settings[key][idx];
+
+  // Check if any active orders reference this item before deleting
+  const itemVal = typeof item === 'object' ? (item.name || item.id) : item;
+  const itemId  = typeof item === 'object' ? item.id : null;
+
+  let usedBy = [];
+  if (key === 'cls') {
+    usedBy = MP.orders.filter(o => o.cl === itemVal && o.status !== 'transferred');
+  } else if (key === 'projects') {
+    usedBy = MP.orders.filter(o => o.project === itemVal && o.status !== 'transferred');
+  } else if (key === 'boqs') {
+    usedBy = MP.orders.filter(o => o.boqId === itemId && o.status !== 'transferred');
+  } else if (key === 'scopes') {
+    usedBy = MP.orders.filter(o => o.scope === itemVal && o.status !== 'transferred');
+  } else if (key === 'typologies') {
+    usedBy = MP.orders.filter(o => o.typologyId === itemId && o.status !== 'transferred');
+  } else if (key === 'items') {
+    usedBy = MP.orders.filter(o =>
+      (o.subs||[]).some(s => s.item === itemVal) && o.status !== 'transferred'
+    );
+  }
+
+  if (usedBy.length > 0) {
+    const clList = usedBy.map(o => o.cl).join(', ');
+    const proceed = confirm(
+      `⚠ Warning: "${itemVal}" is used by ${usedBy.length} active order(s):\n${clList}\n\nDeleting this from settings will NOT affect existing orders — their data is saved independently.\n\nThe item will only be removed from future order dropdowns.\n\nProceed?`
+    );
+    if (!proceed) return;
+  } else {
+    if (!confirm(`Remove "${itemVal}" from settings?`)) return;
+  }
+
+  MP.settings[key].splice(idx, 1);
+  await mpSaveSettings();
+  showToast('Removed from settings.', 'success');
+  mpRenderTab();
 }
 
 async function mpRemoveMachType(mti) {
-  if (!confirm('Delete this machine type and all its units?')) return;
-  MP.settings.machineTypes.splice(mti,1);
-  await mpSaveSettings(); showToast('Removed.','success'); mpRenderTab();
+  const mt = MP.settings.machineTypes[mti];
+  const usedBy = MP.orders.filter(o =>
+    (o.subs||[]).some(s => s.machine && s.machine.startsWith(mt.name)) && o.status !== 'transferred'
+  );
+  if (usedBy.length > 0) {
+    const clList = usedBy.map(o => o.cl).join(', ');
+    if (!confirm(`⚠ "${mt.name}" is used in ${usedBy.length} active order(s): ${clList}\n\nExisting orders are unaffected. Remove from settings?`)) return;
+  } else {
+    if (!confirm(`Delete machine type "${mt.name}" and all its units?`)) return;
+  }
+  MP.settings.machineTypes.splice(mti, 1);
+  await mpSaveSettings();
+  showToast('Machine type removed.', 'success');
+  mpRenderTab();
 }
 
 async function mpRemoveMachUnit(mti, ui) {
@@ -3593,12 +3650,14 @@ async function mpRenderMatDetail(content, moId) {
   `;
 
   (o.subs||[]).forEach(s => {
+    const today   = new Date().toISOString().slice(0,10);
+    const overdue = s.planDate && s.planDate < today && (s.matQty||0) < s.qty;
     h += `
-      <div class="card" style="margin-bottom:10px;padding:14px 16px">
+      <div class="card" style="margin-bottom:10px;padding:14px 16px${overdue?';border-left:4px solid var(--danger)':''}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px">
           <div>
-            <div style="font-size:15px;font-weight:700">${s.item}</div>
-            <div style="font-size:12px;color:var(--slate)">Machine: ${s.machine||'—'} · Date: ${s.planDate||'—'}</div>
+            <div style="font-size:15px;font-weight:700">${s.item}${overdue?' <span class="sbadge sb-rejected">⚠ Delayed</span>':''}</div>
+            <div style="font-size:12px;color:var(--slate)">Machine: ${s.machine||'—'} · Plan Date: ${s.planDate||'—'}</div>
             ${s.matBy?`<div style="font-size:11px;color:var(--slate)">Updated by ${s.matBy} at ${s.matUpdated}</div>`:''}
           </div>
           <div>
@@ -3607,6 +3666,7 @@ async function mpRenderMatDetail(content, moId) {
           </div>
         </div>
         ${s.matRemarks?`<div style="font-size:12px;color:var(--navy);margin-bottom:8px">📝 ${s.matRemarks}</div>`:''}
+        ${overdue?`<div class="al al-dang" style="margin-bottom:8px">⏰ Plan date was <strong>${s.planDate}</strong> — material not yet fully available (${s.matQty||0}/${s.qty})</div>`:''}
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="mpOpenMatEntry('${o.id}','${s.id}')">✏ Update Material</button>
           ${(s.matQty||0)<s.qty?`<button class="btn btn-danger btn-sm" onclick="mpMatAlert('${o.id}','${s.id}')">🔔 Alert Planner</button>`:''}
