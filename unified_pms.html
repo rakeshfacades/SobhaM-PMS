@@ -1540,6 +1540,8 @@ auth.onAuthStateChanged(u => {
 //  HOME — MODULE TILES
 // ═══════════════════════════════════════════════════════════
 function renderHome() {
+  mpDetachAll(); // clean up any active realtime listeners
+  stockView = null;
   const actions  = currentProfile?.actions || {};
   const isAdmin  = currentProfile?.isAdmin === true;
 
@@ -1619,7 +1621,7 @@ function openModule(id) {
     case 'plan':      renderPlan(content);             break;
     case 'machine':   renderRun(content);              break;
     case 'material':  renderMaterial(content);          break;
-    case 'view':      renderViewer(content);             break;
+    case 'stock':     renderStock(content);             break;
     default:          renderPlaceholder(content, backBtn, id); break;
   }
 }
@@ -1762,6 +1764,215 @@ function closeViewerOverlay() {
   if (overlay) overlay.remove();
   document.body.style.overflow = '';
   renderHome();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  STOCK AVAILABLE MODULE
+// ═══════════════════════════════════════════════════════════
+let stockData = {};   // { moveId: movement }
+let stockView = null; // null = CL list, clKey = detail view
+
+async function renderStock(content) {
+  content.innerHTML = `<div class="spinner"></div>`;
+  mpDetachAll();
+  stockView = null;
+
+  // Realtime listener on stockMovements
+  mpAttachListener('stock', db.ref('stockMovements'), snapshot => {
+    stockData = snapshot.val() || {};
+    renderStockList(document.getElementById('app-content'));
+  });
+}
+
+function renderStockList(content) {
+  if (stockView) { renderStockDetail(content, stockView); return; }
+
+  const opName = currentProfile?.displayName || currentProfile?.userId || 'User';
+  const movements = Object.values(stockData);
+
+  // Group by CL
+  const byCL = {};
+  movements.forEach(m => {
+    if (!byCL[m.cl]) byCL[m.cl] = { cl: m.cl, project: m.project, items: [], allReceived: true };
+    byCL[m.cl].items.push(m);
+    if (m.status !== 'received') byCL[m.cl].allReceived = false;
+  });
+
+  const clGroups = Object.values(byCL).sort((a,b) => {
+    // Sort: pending first, then partial, then all received
+    if (!a.allReceived && b.allReceived) return -1;
+    if (a.allReceived && !b.allReceived) return 1;
+    return 0;
+  });
+
+  // Summary counts
+  const totalMovements = movements.length;
+  const received = movements.filter(m=>m.status==='received').length;
+  const pending  = movements.filter(m=>m.status==='sent-assembly').length;
+
+  let h = `
+    <button class="btn-back" onclick="renderHome();mpDetachAll()">← Back to Home</button>
+    <div class="panel-header">
+      <div class="panel-title">🗃 <span>Stock Available</span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;color:var(--success);font-weight:600">🟢 Live</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div class="summary-card">
+        <div class="summary-label">Total Movements</div>
+        <div class="summary-value">${totalMovements}</div>
+        <div class="summary-sub">Parts sent from machine shop</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Awaiting Receipt</div>
+        <div class="summary-value" style="color:var(--warning)">${pending}</div>
+        <div class="summary-sub">Sent but not confirmed</div>
+      </div>
+      <div class="summary-card green">
+        <div class="summary-label">Received</div>
+        <div class="summary-value">${received}</div>
+        <div class="summary-sub">Confirmed by assembly</div>
+      </div>
+    </div>
+  `;
+
+  if (!clGroups.length) {
+    h += `<div class="empty-state"><div class="empty-icon">🗃</div><p>No stock movements yet.<br>Parts will appear here once marked "Sent to Assembly" in the machine shop.</p></div>`;
+  } else {
+    clGroups.forEach(g => {
+      const sentCount     = g.items.filter(m=>m.status==='sent-assembly').length;
+      const receivedCount = g.items.filter(m=>m.status==='received').length;
+      const borderColor   = g.allReceived ? 'var(--success)' : sentCount>0 ? 'var(--gold)' : '#e5e7eb';
+
+      h += `
+        <div class="mo-card" style="border-left:4px solid ${borderColor}"
+          onclick="stockView='${g.cl}';renderStockDetail(document.getElementById('app-content'),'${g.cl}')">
+          <div class="mo-hdr">
+            <div>
+              <div class="mo-cl">${g.cl}</div>
+              <div class="mo-project">${g.project}</div>
+              <div style="font-size:12px;color:var(--slate);margin-top:4px">${g.items.length} component batch(es)</div>
+            </div>
+            <div style="text-align:right">
+              ${g.allReceived
+                ? '<span class="sbadge sb-approved">✅ All Received</span>'
+                : sentCount>0
+                  ? `<span class="sbadge sb-sent">→ ${sentCount} Awaiting</span>`
+                  : '<span class="sbadge sb-draft">Preparing</span>'
+              }
+              <div style="font-size:11px;color:var(--slate);margin-top:4px">${receivedCount}/${g.items.length} confirmed</div>
+            </div>
+          </div>
+          ${mpProgBar(Math.round(receivedCount/Math.max(g.items.length,1)*100))}
+        </div>
+      `;
+    });
+  }
+
+  content.innerHTML = h;
+}
+
+function renderStockDetail(content, cl) {
+  const movements = Object.values(stockData).filter(m=>m.cl===cl);
+  if (!movements.length) { stockView=null; renderStockList(content); return; }
+
+  const proj = movements[0]?.project || '—';
+  const opName = currentProfile?.displayName || currentProfile?.userId || 'User';
+
+  const rows = movements.map(m => {
+    const sentAt = m.sentAt ? new Date(m.sentAt).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}) : '—';
+    const recAt  = m.receivedAt ? new Date(m.receivedAt).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}) : null;
+
+    const statusCell = m.status === 'received'
+      ? `
+        <div>${mpStBadge('received')}</div>
+        <div style="font-size:11px;color:var(--slate);margin-top:3px">By ${m.receivedBy||'—'} · ${recAt}</div>
+      `
+      : `
+        <div>${mpStBadge('sent-assembly')}</div>
+        <button class="btn btn-sm" style="background:var(--success);color:white;margin-top:6px"
+          onclick="mpConfirmReceived('${m.id}')">✅ Confirm Received</button>
+      `;
+
+    return `
+      <tr>
+        <td><strong>${m.item}</strong></td>
+        <td style="font-size:13px;font-weight:700;color:var(--info)">${m.qty}</td>
+        <td style="font-size:12px;color:var(--slate)">${m.scope||'—'} → ${m.boqName||'—'}</td>
+        <td style="font-size:11px;color:var(--slate)">${sentAt}<br><span style="font-size:10px">By ${m.sentBy||'—'}</span></td>
+        <td>${statusCell}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const allReceived = movements.every(m=>m.status==='received');
+  const pendingCount = movements.filter(m=>m.status==='sent-assembly').length;
+
+  content.innerHTML = `
+    <button class="btn-back" onclick="stockView=null;renderStockList(document.getElementById('app-content'))">← Back to Stock List</button>
+    <div class="panel-header">
+      <div class="panel-title">🗃 <span>${cl}</span></div>
+      <span style="font-size:11px;color:var(--success);font-weight:600">🟢 Live</span>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;padding:14px 16px">
+      <div style="font-size:14px;font-weight:700">${cl} — ${proj}</div>
+      <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
+        <span class="sbadge sb-released">${movements.length} total batches</span>
+        <span class="sbadge ${pendingCount>0?'sb-pending':'sb-approved'}">${pendingCount} awaiting receipt</span>
+        ${allReceived?'<span class="sbadge sb-approved">✅ Fully Received</span>':''}
+      </div>
+    </div>
+
+    ${pendingCount>0?`
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn btn-primary" onclick="mpConfirmAllReceived('${cl}')">✅ Confirm All as Received</button>
+      </div>
+    `:''}
+
+    <div class="card">
+      <div class="card-header">📦 Component Movements</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th><th>Qty</th><th>Scope / BOQ</th><th>Sent</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+async function mpConfirmReceived(moveId) {
+  const opName = currentProfile?.displayName || currentProfile?.userId || 'Assembly';
+  await db.ref(`stockMovements/${moveId}`).update({
+    status: 'received',
+    receivedAt: new Date().toISOString(),
+    receivedBy: opName,
+  });
+  stockData[moveId] = { ...stockData[moveId], status:'received', receivedAt:new Date().toISOString(), receivedBy:opName };
+  showToast('Confirmed received.','success');
+  renderStockDetail(document.getElementById('app-content'), stockData[moveId]?.cl);
+}
+
+async function mpConfirmAllReceived(cl) {
+  if (!confirm(`Mark ALL pending items for ${cl} as received?`)) return;
+  const opName = currentProfile?.displayName || currentProfile?.userId || 'Assembly';
+  const pending = Object.values(stockData).filter(m=>m.cl===cl&&m.status==='sent-assembly');
+  await Promise.all(pending.map(m =>
+    db.ref(`stockMovements/${m.id}`).update({
+      status:'received', receivedAt:new Date().toISOString(), receivedBy:opName,
+    }).then(()=>{
+      stockData[m.id] = {...m, status:'received', receivedAt:new Date().toISOString(), receivedBy:opName};
+    })
+  ));
+  showToast(`All items for ${cl} confirmed received.`,'success');
+  renderStockDetail(document.getElementById('app-content'), cl);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2291,8 +2502,11 @@ const MP = {
     dtr: ['Breakdown','Setup/Changeover','No Material','Waiting for Job Card','Operator Absent','Maintenance'],
   },
 
-  // Run state
-  activeSession: null,
+  // Realtime listeners — stored so we can detach on module close
+  listeners: {},
+
+  // Material tab state
+  matTab: 'pending',
   timerInt:      null,
   timerSec:      0,
 
@@ -2321,7 +2535,7 @@ function mpStBadge(s) {
     'pending-verify':'<span class="sbadge sb-pending">Pending Verify</span>',
     approved:'<span class="sbadge sb-approved">Approved</span>',
     rejected:'<span class="sbadge sb-rejected">Rejected</span>',
-    running:'<span class="sbadge sb-running">Running</span>',
+    received:        '<span class="sbadge sb-approved">✅ Received</span>',
     paused:'<span class="sbadge sb-paused">Paused</span>',
     idle:'<span class="sbadge sb-draft">Idle</span>',
     downtime:'<span class="sbadge sb-rejected">Downtime</span>',
@@ -2440,15 +2654,57 @@ async function mpSaveAlert(a) {
   await MP.alertsRef().child(a.id).set(a);
 }
 
+// ── Realtime listener management ───────────────
+function mpAttachListener(key, ref, callback) {
+  mpDetachListener(key);
+  const handler = ref.on('value', snapshot => {
+    callback(snapshot);
+  });
+  MP.listeners[key] = { ref, handler };
+}
+
+function mpDetachListener(key) {
+  if (MP.listeners[key]) {
+    MP.listeners[key].ref.off('value', MP.listeners[key].handler);
+    delete MP.listeners[key];
+  }
+}
+
+function mpDetachAll() {
+  Object.keys(MP.listeners).forEach(k => mpDetachListener(k));
+}
+
 // ═══════════════════════════════════════════════════════════
 //  ORDERS & PLANNING MODULE
 // ═══════════════════════════════════════════════════════════
 async function renderPlan(content) {
   content.innerHTML = `<div class="spinner"></div>`;
+  mpDetachAll();
   await mpLoadAll();
   MP.planTab = 'orders';
   MP.schView = null;
   renderPlanContent(content);
+
+  // Realtime listener for orders, sessions, alerts
+  mpAttachListener('plan-orders', MP.ordersRef(), snapshot => {
+    const od = snapshot.val() || {};
+    MP.orders = Object.entries(od).map(([id,o])=>({...o,id,subs:o.subs?Object.values(o.subs):[]}));
+    mpRenderTab();
+  });
+  mpAttachListener('plan-sessions', MP.sessRef(), snapshot => {
+    const sd = snapshot.val() || {};
+    MP.sessions = Object.entries(sd).map(([id,s])=>({...s,id}));
+    mpRenderTab();
+  });
+  mpAttachListener('plan-alerts', MP.alertsRef(), snapshot => {
+    const ad = snapshot.val() || {};
+    MP.alerts = Object.entries(ad).map(([id,a])=>({...a,id}));
+    // Update badge counts in tabs without full re-render
+    const unread = MP.alerts.filter(a=>!a.read).length;
+    const pv = MP.sessions.filter(s=>s.status==='pending-verify').length;
+    // Re-render tab header badges only
+    renderPlanContent(content);
+  });
 }
 
 function renderPlanContent(content) {
@@ -3165,35 +3421,101 @@ function mpRenderWip(c) {
     c.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><p>No WIP orders yet.</p></div>`;
     return;
   }
+
   c.innerHTML = wipOrders.map(o=>{
     const isWip = o.status==='wip';
-    return `
-      <div class="card" style="margin-bottom:12px;border-left:4px solid ${isWip?'var(--success)':'var(--info)'}">
-        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span>${o.cl} — ${o.project}</span>
-          <div style="display:flex;gap:6px;align-items:center">
-            ${mpStBadge(o.status)}
-            ${isWip?`<button class="btn btn-primary btn-sm" onclick="mpTransferAll('${o.id}')">→ Transfer All</button>`:''}
+    const allSent = (o.subs||[]).every(s=>s.wipStatus==='sent-assembly'||s.status==='complete'&&(s.sentQty||0)>=(s.done||0));
+
+    const subRows = (o.subs||[]).map(s=>{
+      const ws = s.wipStatus || (s.done>0?'ready-assembly':'');
+      const statusBtns = ws === 'sent-assembly'
+        ? `${mpStBadge('sent-assembly')}`
+        : ws === 'ready-assembly'
+          ? `
+            <span>${mpStBadge('ready-assembly')}</span>
+            <button class="btn btn-sm" style="background:var(--info);color:white;margin-left:8px"
+              onclick="mpSetWipStatus('${o.id}','${s.id}','sent-assembly')">→ Mark Sent</button>
+          `
+          : `
+            <button class="btn btn-ghost btn-sm"
+              onclick="mpSetWipStatus('${o.id}','${s.id}','ready-assembly')">📦 Mark Ready</button>
+          `;
+
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;
+          padding:10px 0;border-bottom:1px solid #f3f4f6;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:13px;font-weight:600">${s.item}</div>
+            <div style="font-size:11px;color:var(--slate)">Done: ${s.done||0} / ${s.qty} · Sent: ${s.sentQty||0}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${statusBtns}
           </div>
         </div>
-        <div style="padding:12px 16px">
-          <div style="font-size:12px;color:var(--slate);margin-bottom:10px">
+      `;
+    }).join('');
+
+    return `
+      <div class="card" style="margin-bottom:12px;border-left:4px solid ${isWip?'var(--success)':'var(--info)'}">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <span>${o.cl} — ${o.project}</span>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            ${mpStBadge(o.status)}
+            ${isWip?`
+              <button class="btn btn-primary btn-sm" onclick="mpMarkAllReady('${o.id}')">📦 All Ready</button>
+              <button class="btn btn-sm" style="background:var(--info);color:white" onclick="mpTransferAll('${o.id}')">→ Transfer All</button>
+            `:''}
+          </div>
+        </div>
+        <div style="padding:0 16px 12px">
+          <div style="font-size:12px;color:var(--slate);padding:8px 0">
             PI: ${o.pi||'—'} · ${o.scope||'—'} → ${o.boqName||'—'} → ${o.typologyName||'—'}
           </div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px">
-            ${(o.subs||[]).map(s=>`
-              <div class="metric-box" style="padding:10px 14px;min-width:120px">
-                <div class="lbl" style="font-size:10px">${s.item}</div>
-                <div class="val" style="font-size:18px;color:${s.status==='complete'?'var(--success)':'var(--warning)'}">${s.done||0}/${s.qty}</div>
-                <div class="sub">Sent: ${s.sentQty||0}</div>
-              </div>
-            `).join('')}
-          </div>
-          ${isWip?`<div class="al al-succ" style="margin-top:10px;margin-bottom:0">📦 Ready for assembly handoff</div>`:''}
+          ${subRows}
+          ${allSent&&isWip?`<div class="al al-succ" style="margin-top:10px;margin-bottom:0">✅ All components sent to assembly — ready to transfer</div>`:''}
         </div>
       </div>
     `;
   }).join('');
+}
+
+async function mpSetWipStatus(moId, soId, status) {
+  const o = MP.orders.find(x=>x.id===moId);
+  const s = (o?.subs||[]).find(x=>x.id===soId);
+  if (!s) return;
+  s.wipStatus = status;
+
+  // If marking sent, also write to stockMovements for Stock Available tab
+  if (status === 'sent-assembly') {
+    const avail = (s.done||0) - (s.sentQty||0);
+    if (avail > 0) {
+      const moveId = 'SM-'+Date.now();
+      await db.ref(`stockMovements/${moveId}`).set({
+        id: moveId, moId, soId,
+        cl: o.cl, project: o.project,
+        scope: o.scope||'', boqName: o.boqName||'',
+        typologyName: o.typologyName||'',
+        item: s.item, qty: avail,
+        sentAt: new Date().toISOString(),
+        sentBy: currentProfile?.userId||'supervisor',
+        status: 'sent-assembly',
+        receivedAt: null, receivedBy: null,
+      });
+      s.sentQty = (s.sentQty||0) + avail;
+    }
+  }
+
+  await mpSaveOrder(o);
+  showToast(status==='sent-assembly'?'Marked as sent to assembly.':'Marked as ready for assembly.','success');
+}
+
+async function mpMarkAllReady(moId) {
+  const o = MP.orders.find(x=>x.id===moId);
+  (o?.subs||[]).forEach(s => {
+    if ((s.done||0)>0 && s.wipStatus!=='sent-assembly') s.wipStatus='ready-assembly';
+  });
+  await mpSaveOrder(o);
+  showToast('All components marked ready.','success');
 }
 
 // ── MACHINES TAB ───────────────────────────────
@@ -3589,41 +3911,95 @@ async function mpRemoveMachUnit(mti, ui) {
 // ═══════════════════════════════════════════════════════════
 async function renderMaterial(content) {
   content.innerHTML = `<div class="spinner"></div>`;
+  mpDetachAll();
   await mpLoadAll();
+  MP.matTab = 'pending';
+  renderMaterialList(content);
 
+  // Attach realtime listener — auto-refresh material list when orders change
+  mpAttachListener('mat-orders', MP.ordersRef(), snapshot => {
+    const od = snapshot.val() || {};
+    MP.orders = Object.entries(od).map(([id,o])=>({...o,id,subs:o.subs?Object.values(o.subs):[]}));
+    // Only re-render list view, not detail view
+    const backBtn = document.querySelector('.btn-back');
+    if (backBtn && backBtn.textContent.includes('All Orders')) return;
+    renderMaterialList(document.getElementById('app-content'));
+  });
+}
+
+function renderMaterialList(content) {
   const opName = currentProfile?.displayName || currentProfile?.userId || 'Material Handler';
+  const activeOrders = MP.orders.filter(o => o.status !== 'transferred' && o.status !== 'draft');
+
+  // Categorize orders by material status
+  const pending  = activeOrders.filter(o => {
+    const tot = (o.subs||[]).length;
+    const full = (o.subs||[]).filter(s=>(s.matQty||0)>=(s.qty||1)).length;
+    return full === 0;
+  });
+  const partial  = activeOrders.filter(o => {
+    const tot = (o.subs||[]).length;
+    const full = (o.subs||[]).filter(s=>(s.matQty||0)>=(s.qty||1)).length;
+    return full > 0 && full < tot;
+  });
+  const complete = activeOrders.filter(o => {
+    const tot = (o.subs||[]).length;
+    const full = (o.subs||[]).filter(s=>(s.matQty||0)>=(s.qty||1)).length;
+    return tot > 0 && full === tot;
+  });
+
+  const tabs = [
+    { key:'pending',  label:`❌ Pending`,  count: pending.length,  orders: pending  },
+    { key:'partial',  label:`⚠ Partial`,  count: partial.length,  orders: partial  },
+    { key:'complete', label:`✅ Complete`, count: complete.length, orders: complete },
+  ];
+
+  const currentOrders = tabs.find(t => t.key === MP.matTab)?.orders || [];
 
   let h = `
-    <button class="btn-back" onclick="renderHome()">← Back to Home</button>
+    <button class="btn-back" onclick="renderHome();mpDetachAll()">← Back to Home</button>
     <div class="panel-header">
       <div class="panel-title">📦 <span>Material</span></div>
-      <div style="font-size:13px;color:var(--slate)">Handler: <strong>${opName}</strong></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;color:var(--success);font-weight:600">🟢 Live</span>
+        <div style="font-size:13px;color:var(--slate)">Handler: <strong>${opName}</strong></div>
+      </div>
     </div>
-    <div class="al al-info" style="margin-bottom:16px">Select a CL order to view and update material availability for each component.</div>
+    <div class="mch-tabs" style="margin-bottom:16px">
+      ${tabs.map(t => `
+        <button class="mch-tab ${MP.matTab===t.key?'active':''}"
+          onclick="MP.matTab='${t.key}';renderMaterialList(document.getElementById('app-content'))">
+          ${t.label}
+          ${t.count>0?`<span class="tbadge" style="background:${t.key==='pending'?'var(--danger)':t.key==='partial'?'#f59e0b':'var(--success)'}">${t.count}</span>`:''}
+        </button>
+      `).join('')}
+    </div>
   `;
 
-  const activeOrders = MP.orders.filter(o=>o.status!=='transferred'&&o.status!=='draft');
-
   if (!activeOrders.length) {
-    h += `<div class="empty-state"><div class="empty-icon">📦</div><p>No released orders to update material for.</p></div>`;
+    h += `<div class="empty-state"><div class="empty-icon">📦</div><p>No released orders yet.</p></div>`;
+  } else if (!currentOrders.length) {
+    h += `<div class="empty-state"><div class="empty-icon">✅</div><p>No orders in this category.</p></div>`;
   } else {
-    activeOrders.forEach(o => {
+    currentOrders.forEach(o => {
       const mFull = (o.subs||[]).filter(s=>(s.matQty||0)>=(s.qty||1)).length;
       const tot   = (o.subs||[]).length;
-      const badge = mFull===tot && tot>0
-        ? '<span class="sbadge sb-approved">✅ Full</span>'
-        : mFull>0
-          ? '<span class="sbadge sb-pending">⚠ Partial</span>'
-          : '<span class="sbadge sb-rejected">❌ Missing</span>';
+      const today = new Date().toISOString().slice(0,10);
+      const overdue = (o.subs||[]).some(s => s.planDate && s.planDate < today && (s.matQty||0) < s.qty);
+
       h += `
-        <div class="mo-card ${o.priority?'urgent':''}" onclick="mpRenderMatDetail(document.getElementById('app-content'),'${o.id}')">
+        <div class="mo-card ${o.priority?'urgent':''} ${overdue?'style="border-left:4px solid var(--danger)"':''}"
+          onclick="mpRenderMatDetail(document.getElementById('app-content'),'${o.id}')">
           <div class="mo-hdr">
             <div>
-              <div class="mo-cl">${o.cl} ${o.priority?'<span class="sbadge sb-urgent">🔥</span>':''}</div>
+              <div class="mo-cl">${o.cl} ${o.priority?'<span class="sbadge sb-urgent">🔥</span>':''} ${overdue?'<span class="sbadge sb-rejected">⏰ Delayed</span>':''}</div>
               <div class="mo-project">${o.project} · ${o.pi||'—'} · ${o.batch||'—'}</div>
-              <div style="font-size:12px;color:var(--slate)">${tot} components</div>
+              <div style="font-size:12px;color:var(--slate);margin-top:3px">${tot} components · ${mFull} complete</div>
             </div>
-            ${badge}
+            <div>
+              ${mpProgBar(Math.round(mFull/Math.max(tot,1)*100))}
+              <div style="font-size:11px;color:var(--slate);margin-top:3px">${Math.round(mFull/Math.max(tot,1)*100)}% stocked</div>
+            </div>
           </div>
         </div>
       `;
@@ -3634,6 +4010,24 @@ async function renderMaterial(content) {
 }
 
 async function mpRenderMatDetail(content, moId) {
+  // Attach realtime listener for this specific order
+  mpAttachListener('mat-detail', MP.ordersRef().child(moId), snapshot => {
+    const data = snapshot.val();
+    if (!data) return;
+    const idx = MP.orders.findIndex(x=>x.id===moId);
+    const updated = {...data, id:moId, subs:data.subs?Object.values(data.subs):[]};
+    if (idx>=0) MP.orders[idx] = updated;
+    else MP.orders.push(updated);
+    // Re-render detail if still showing
+    const backBtn = document.querySelector('.btn-back');
+    if (backBtn && backBtn.textContent.includes('All Orders')) {
+      _mpDrawMatDetail(content, moId);
+    }
+  });
+  _mpDrawMatDetail(content, moId);
+}
+
+function _mpDrawMatDetail(content, moId) {
   const o = MP.orders.find(x=>x.id===moId);
   if (!o) return;
   const opName = currentProfile?.displayName || currentProfile?.userId || 'Material Handler';
