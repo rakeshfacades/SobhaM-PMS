@@ -1408,6 +1408,15 @@
         <div class="role-screen" id="roleScreen">
             <h1>🏭 Sobha Modular PMS</h1>
             <p>Please select your role to continue</p>
+
+            <!-- Auto-start status banner -->
+            <div id="autoStartBanner" style="display:none;margin:16px auto;max-width:480px;
+                padding:14px 20px;border-radius:10px;font-size:14px;font-weight:600;
+                background:linear-gradient(135deg,#1a1a2e,#2c2c3e);color:#d4af37;
+                border:1px solid #d4af37;text-align:center;letter-spacing:0.3px">
+                ⏰ <span id="autoStartMsg">Checking for scheduled session...</span>
+            </div>
+
             <div class="role-buttons">
                 <div class="role-btn monitor-btn" onclick="selectMonitorRole()">
                     <span class="role-icon">📊</span>
@@ -1420,9 +1429,66 @@
                     <div class="role-desc">Live dashboard - read only</div>
                 </div>
             </div>
+
+            <!-- Schedule button — bottom left -->
+            <button onclick="openScheduleModal()" style="position:absolute;bottom:80px;left:30px;
+                padding:12px 24px;background:#1a1a2e;color:#d4af37;border:2px solid #d4af37;
+                border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;
+                text-transform:uppercase;letter-spacing:0.5px;
+                box-shadow:0 4px 12px rgba(212,175,55,0.3);z-index:100;transition:all 0.3s;"
+                onmouseover="this.style.background='#d4af37';this.style.color='#1a1a2e';"
+                onmouseout="this.style.background='#1a1a2e';this.style.color='#d4af37';">
+                📅 Schedule
+            </button>
+
+            <!-- View Schedules button -->
+            <button onclick="openViewSchedules()" style="position:absolute;bottom:30px;left:30px;
+                padding:8px 18px;background:transparent;color:#d4af37;border:1.5px solid rgba(212,175,55,0.5);
+                border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+                letter-spacing:0.3px;z-index:100;transition:all 0.3s;"
+                onmouseover="this.style.borderColor='#d4af37';this.style.background='rgba(212,175,55,0.1)';"
+                onmouseout="this.style.borderColor='rgba(212,175,55,0.5)';this.style.background='transparent';">
+                📋 View Schedules
+            </button>
             <button onclick="selectAdminRole()" style="position: absolute; bottom: 80px; right: 30px; padding: 12px 24px; background: #d4af37; color: #1a1a2e; border: 2px solid #d4af37; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; opacity: 1; transition: all 0.3s; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4); z-index: 100;" onmouseover="this.style.background='#1a1a2e'; this.style.color='#d4af37';" onmouseout="this.style.background='#d4af37'; this.style.color='#1a1a2e';">
                 🔧 Admin
             </button>
+        </div>
+
+        <!-- View Schedules Modal -->
+        <div id="viewSchedulesModal" style="display:none;position:fixed;inset:0;
+            background:rgba(0,0,0,0.7);z-index:1000;align-items:center;
+            justify-content:center;padding:16px;">
+            <div style="background:white;border-radius:16px;width:100%;max-width:580px;
+                max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+                <div style="background:linear-gradient(135deg,#1a1a2e,#2c2c3e);
+                    border-bottom:3px solid #d4af37;padding:18px 24px;
+                    border-radius:16px 16px 0 0;
+                    display:flex;justify-content:space-between;align-items:center;
+                    position:sticky;top:0;z-index:1;">
+                    <div style="color:#d4af37;font-size:17px;font-weight:700;">📋 Scheduled Sessions</div>
+                    <button onclick="closeViewSchedules()" style="background:none;border:none;
+                        color:#d4af37;font-size:22px;cursor:pointer;">✕</button>
+                </div>
+                <div id="viewSchedulesBody" style="padding:20px;">
+                    <div style="text-align:center;padding:30px;color:#708090;">Loading...</div>
+                </div>
+                <div style="padding:14px 20px;border-top:1px solid #f0f0f0;
+                    display:flex;justify-content:space-between;align-items:center;">
+                    <button onclick="openScheduleModal();closeViewSchedules()"
+                        style="padding:10px 20px;background:linear-gradient(135deg,#d4af37,#b8941f);
+                        color:#1a1a2e;border:none;border-radius:8px;font-size:13px;
+                        font-weight:700;cursor:pointer;font-family:inherit;">
+                        + Add New Schedule
+                    </button>
+                    <button onclick="closeViewSchedules()"
+                        style="padding:10px 20px;background:#f5f5f5;color:#708090;
+                        border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;
+                        font-weight:600;cursor:pointer;font-family:inherit;">
+                        Close
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Admin Password Modal -->
@@ -1434,6 +1500,191 @@
                 <div class="modal-buttons">
                     <button class="btn-modal-confirm" onclick="verifyAdminPassword()">Enter</button>
                     <button class="btn-modal-cancel" onclick="cancelAdminPassword()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schedule Modal -->
+        <div id="scheduleModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);
+            z-index:1000;align-items:center;justify-content:center;padding:16px;">
+            <div style="background:white;border-radius:16px;width:100%;max-width:640px;
+                max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+
+                <!-- Header -->
+                <div style="background:linear-gradient(135deg,#1a1a2e,#2c2c3e);
+                    border-bottom:3px solid #d4af37;padding:20px 24px;border-radius:16px 16px 0 0;
+                    display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="color:#d4af37;font-size:18px;font-weight:700;">📅 Schedule Session</div>
+                        <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-top:3px;">
+                            Pre-configure tomorrow's session — it will auto-start at shift time
+                        </div>
+                    </div>
+                    <button onclick="closeScheduleModal()" style="background:none;border:none;
+                        color:#d4af37;font-size:22px;cursor:pointer;line-height:1;">✕</button>
+                </div>
+
+                <!-- Body -->
+                <div style="padding:24px;">
+                    <!-- Saved schedules -->
+                    <div id="savedSchedulesList" style="margin-bottom:20px;"></div>
+
+                    <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:16px;
+                        padding-bottom:8px;border-bottom:2px solid #f0e6cc;">
+                        ➕ Add New Schedule
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Schedule Date
+                            </label>
+                            <input type="date" id="sch-date" style="width:100%;padding:9px 12px;
+                                border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;
+                                font-family:inherit;">
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Line
+                            </label>
+                            <div id="sch-line-container"></div>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Project
+                            </label>
+                            <div id="sch-project-container"></div>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                BOQ
+                            </label>
+                            <select id="sch-boq" style="width:100%;padding:9px 12px;
+                                border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;
+                                font-family:inherit;">
+                                <option value="">Select BOQ</option>
+                                <option value="ACP">ACP</option>
+                                <option value="CW">CW</option>
+                                <option value="WW">WW</option>
+                                <option value="UCW">UCW</option>
+                                <option value="Door">Door</option>
+                                <option value="Window">Window</option>
+                                <option value="Non-System">Non-System</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Typology
+                            </label>
+                            <div id="sch-typology-container"></div>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Plan (Target Qty)
+                            </label>
+                            <input type="number" id="sch-plan" min="1" placeholder="e.g. 100"
+                                style="width:100%;padding:9px 12px;border:1.5px solid #e0e0e0;
+                                border-radius:8px;font-size:14px;font-family:inherit;">
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Cycle Time (seconds)
+                            </label>
+                            <input type="number" id="sch-cycle" min="1" placeholder="e.g. 90"
+                                style="width:100%;padding:9px 12px;border:1.5px solid #e0e0e0;
+                                border-radius:8px;font-size:14px;font-family:inherit;">
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                SQM per Unit (optional)
+                            </label>
+                            <input type="number" id="sch-sqm" min="0" step="0.01" placeholder="e.g. 2.5"
+                                style="width:100%;padding:9px 12px;border:1.5px solid #e0e0e0;
+                                border-radius:8px;font-size:14px;font-family:inherit;">
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Shift Start
+                            </label>
+                            <div id="sch-shift-start-container"></div>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Shift End
+                            </label>
+                            <div id="sch-shift-end-container"></div>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Lunch Start
+                            </label>
+                            <div id="sch-lunch-start-container"></div>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Lunch End
+                            </label>
+                            <div id="sch-lunch-end-container"></div>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Tea Break Start
+                            </label>
+                            <div id="sch-tea-start-container"></div>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Tea Break End
+                            </label>
+                            <div id="sch-tea-end-container"></div>
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Total Manpower
+                            </label>
+                            <input type="number" id="sch-manpower" min="1" placeholder="e.g. 12"
+                                style="width:100%;padding:9px 12px;border:1.5px solid #e0e0e0;
+                                border-radius:8px;font-size:14px;font-family:inherit;">
+                        </div>
+                        <div>
+                            <label style="font-size:11px;font-weight:700;color:#708090;
+                                text-transform:uppercase;letter-spacing:0.7px;display:block;margin-bottom:5px;">
+                                Present
+                            </label>
+                            <input type="number" id="sch-present" min="0" placeholder="e.g. 10"
+                                style="width:100%;padding:9px 12px;border:1.5px solid #e0e0e0;
+                                border-radius:8px;font-size:14px;font-family:inherit;">
+                        </div>
+                    </div>
+
+                    <!-- Save button -->
+                    <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;">
+                        <button onclick="closeScheduleModal()" style="padding:11px 22px;
+                            background:#f5f5f5;color:#708090;border:1.5px solid #e0e0e0;
+                            border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;
+                            font-family:inherit;">Cancel</button>
+                        <button onclick="saveSchedule()" style="padding:11px 22px;
+                            background:linear-gradient(135deg,#d4af37,#b8941f);color:#1a1a2e;
+                            border:none;border-radius:8px;font-size:14px;font-weight:700;
+                            cursor:pointer;font-family:inherit;letter-spacing:0.3px;">
+                            💾 Save Schedule
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2766,6 +3017,10 @@
         let sensorRef = null;          // Firebase ref for current line's sensor pulse count
         let sensorLastPulseCount = null; // Last pulse count value we processed
         let sensorOnlineCheckInterval = null;
+        let sensorCorrectionRef = null;       // Firebase ref for -1 corrections from button
+        let sensorLastCorrectionCount = null; // Last correction count processed
+        let sensorDtSignalRef = null;         // Firebase ref for downtime signal from button
+        let sensorLastDtSignal = null;        // Last downtime signal processed
         
         // ── Cycle Time & Expected Counter Variables ──────
         let currentCycleStartTime = null;
@@ -2783,6 +3038,299 @@
 
 
         // ── Role Selection ──────────────────────────────
+        // ══════════════════════════════════════════════════════════
+        //  SCHEDULE & AUTO-START SYSTEM
+        // ══════════════════════════════════════════════════════════
+
+        let autoStartCheckInterval = null;
+        let autoStartCountdown = null;
+        let scheduledSessionData = null;
+
+        // ── Populate schedule form dynamic fields (same dropdowns as setup) ──
+        function populateScheduleForm() {
+            // Clone dynamic containers from setup form
+            const cloneContainer = (sourceId, targetId) => {
+                const src = document.getElementById(sourceId);
+                const tgt = document.getElementById(targetId);
+                if (src && tgt) tgt.innerHTML = src.innerHTML;
+            };
+            cloneContainer('lineContainer',       'sch-line-container');
+            cloneContainer('projectContainer',    'sch-project-container');
+            cloneContainer('typologyContainer',   'sch-typology-container');
+            cloneContainer('shiftStartContainer', 'sch-shift-start-container');
+            cloneContainer('shiftEndContainer',   'sch-shift-end-container');
+            cloneContainer('lunchStartContainer', 'sch-lunch-start-container');
+            cloneContainer('lunchEndContainer',   'sch-lunch-end-container');
+            cloneContainer('teaStartContainer',   'sch-tea-start-container');
+            cloneContainer('teaEndContainer',     'sch-tea-end-container');
+
+            // Prefix IDs in cloned elements to avoid conflicts
+            const modal = document.getElementById('scheduleModal');
+            ['line','project','typology','shiftStart','shiftEnd',
+             'lunchStart','lunchEnd','teaStart','teaEnd'].forEach(field => {
+                const orig = modal.querySelector(`#${field}`);
+                if (orig) orig.id = `sch-${field}`;
+            });
+
+            // Set default date to tomorrow
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            document.getElementById('sch-date').value = tomorrow.toISOString().slice(0,10);
+        }
+
+        // ── Load and show saved schedules ──
+        async function loadSavedSchedules() {
+            const snap = await db.ref('schedules').once('value');
+            const data = snap.val() || {};
+            const el   = document.getElementById('savedSchedulesList');
+            if (!el) return;
+
+            const today = new Date().toISOString().slice(0,10);
+            const entries = [];
+            Object.entries(data).forEach(([date, lines]) => {
+                if (date < today) return; // skip past dates
+                Object.entries(lines).forEach(([line, sch]) => {
+                    entries.push({...sch, date, line});
+                });
+            });
+
+            entries.sort((a,b) => a.date > b.date ? 1 : -1);
+
+            if (!entries.length) {
+                el.innerHTML = '';
+                return;
+            }
+
+            el.innerHTML = `
+                <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:10px;">
+                    📋 Upcoming Schedules
+                </div>
+                ${entries.map(s => `
+                    <div style="background:#f8f9fa;border:1px solid #e9ecef;border-left:4px solid #d4af37;
+                        border-radius:8px;padding:12px 14px;margin-bottom:8px;
+                        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                        <div>
+                            <div style="font-size:13px;font-weight:700;color:#1a1a2e;">
+                                📅 ${s.date} — Line ${s.line}
+                            </div>
+                            <div style="font-size:12px;color:#708090;margin-top:2px;">
+                                ${s.project||'—'} · ${s.boq||'—'} · ${s.typology||'—'} · Plan: ${s.plan||'—'}
+                                · ${s.shiftStart||'—'} to ${s.shiftEnd||'—'}
+                            </div>
+                        </div>
+                        <button onclick="deleteSchedule('${s.date}','${s.line}')"
+                            style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;
+                            padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;">
+                            🗑 Delete
+                        </button>
+                    </div>
+                `).join('')}
+                <div style="border-bottom:2px solid #f0e6cc;margin-bottom:16px;"></div>
+            `;
+        }
+
+        // ── Open schedule modal ──
+        async function openScheduleModal() {
+            document.getElementById('scheduleModal').style.display = 'flex';
+            // Wait for setup form dropdowns to be populated first
+            setTimeout(() => {
+                populateScheduleForm();
+                loadSavedSchedules();
+            }, 100);
+        }
+
+        function closeScheduleModal() {
+            document.getElementById('scheduleModal').style.display = 'none';
+        }
+
+        // ── Save schedule to Firebase ──
+        async function saveSchedule() {
+            const getVal = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.value : '';
+            };
+
+            const date      = getVal('sch-date');
+            const line      = getVal('sch-line') || getVal('sch-lineContainer')?.querySelector('select,input')?.value || '';
+            const project   = getVal('sch-project') || document.querySelector('#sch-project-container select,#sch-project-container input')?.value || '';
+            const boq       = getVal('sch-boq');
+            const typology  = getVal('sch-typology') || document.querySelector('#sch-typology-container select,#sch-typology-container input')?.value || '';
+            const plan      = parseInt(getVal('sch-plan'))||0;
+            const cycle     = parseInt(getVal('sch-cycle'))||0;
+            const sqm       = parseFloat(getVal('sch-sqm'))||0;
+            const shiftStart= getVal('sch-shiftStart') || document.querySelector('#sch-shift-start-container select,#sch-shift-start-container input')?.value || '';
+            const shiftEnd  = getVal('sch-shiftEnd') || document.querySelector('#sch-shift-end-container select,#sch-shift-end-container input')?.value || '';
+            const lunchStart= document.querySelector('#sch-lunch-start-container select,#sch-lunch-start-container input')?.value || '';
+            const lunchEnd  = document.querySelector('#sch-lunch-end-container select,#sch-lunch-end-container input')?.value || '';
+            const teaStart  = document.querySelector('#sch-tea-start-container select,#sch-tea-start-container input')?.value || '';
+            const teaEnd    = document.querySelector('#sch-tea-end-container select,#sch-tea-end-container input')?.value || '';
+            const manpower  = parseInt(getVal('sch-manpower'))||0;
+            const present   = parseInt(getVal('sch-present'))||0;
+
+            if (!date)       { alert('Please select a date.'); return; }
+            if (!line)       { alert('Please select a line.'); return; }
+            if (!plan||plan<1){ alert('Please enter a valid plan target.'); return; }
+            if (!shiftStart) { alert('Please select shift start time.'); return; }
+            if (!shiftEnd)   { alert('Please select shift end time.'); return; }
+            if (!cycle||cycle<1){ alert('Please enter cycle time.'); return; }
+
+            const sanitizedLine = line.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            const schedule = {
+                line, project, boq, typology, plan, cycleTime: cycle,
+                sqmPerUnit: sqm, shiftStart, shiftEnd,
+                lunchStart, lunchEnd, teaStart, teaEnd,
+                manpower, present, savedAt: new Date().toISOString(),
+            };
+
+            await db.ref(`schedules/${date}/${sanitizedLine}`).set(schedule);
+            alert(`✅ Schedule saved for ${date} — Line ${line}\nSession will auto-start at ${shiftStart}`);
+            closeScheduleModal();
+        }
+
+        async function deleteSchedule(date, line) {
+            if (!confirm(`Delete schedule for ${date} — Line ${line}?`)) return;
+            const sanitizedLine = line.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            await db.ref(`schedules/${date}/${sanitizedLine}`).remove();
+            loadSavedSchedules();
+        }
+
+        // ── Auto-start: check Firebase every minute for today's schedule ──
+        function startAutoStartChecker() {
+            checkTodaySchedule(); // immediate check on load
+            if (autoStartCheckInterval) clearInterval(autoStartCheckInterval);
+            autoStartCheckInterval = setInterval(checkTodaySchedule, 60000); // every minute
+        }
+
+        function stopAutoStartChecker() {
+            if (autoStartCheckInterval) {
+                clearInterval(autoStartCheckInterval);
+                autoStartCheckInterval = null;
+            }
+            if (autoStartCountdown) {
+                clearInterval(autoStartCountdown);
+                autoStartCountdown = null;
+            }
+        }
+
+        async function checkTodaySchedule() {
+            // Only check if we are on the role screen (no active session)
+            const roleScreen = document.getElementById('roleScreen');
+            if (!roleScreen || roleScreen.classList.contains('hidden')) return;
+
+            const today   = new Date().toISOString().slice(0,10);
+            const snap    = await db.ref(`schedules/${today}`).once('value');
+            const todaySchedules = snap.val();
+
+            if (!todaySchedules) {
+                showAutoStartBanner('No session scheduled for today', false);
+                return;
+            }
+
+            // Find schedule for any line (take first one found today)
+            const lines = Object.entries(todaySchedules);
+            if (!lines.length) return;
+            const [sanitizedLine, sch] = lines[0];
+            scheduledSessionData = sch;
+
+            const now         = new Date();
+            const [sh, sm]    = (sch.shiftStart||'07:30').split(':');
+            const [eh, em]    = (sch.shiftEnd||'16:30').split(':');
+
+            const shiftStart  = new Date();
+            shiftStart.setHours(parseInt(sh), parseInt(sm), 0, 0);
+
+            const shiftEnd    = new Date();
+            shiftEnd.setHours(parseInt(eh), parseInt(em), 0, 0);
+
+            // If shift already ended today — don't auto-start
+            if (now >= shiftEnd) {
+                showAutoStartBanner(`Today's session ended at ${sch.shiftEnd}`, false);
+                return;
+            }
+
+            // If shift start time has arrived → auto-start
+            if (now >= shiftStart) {
+                showAutoStartBanner(`🚀 Auto-starting session for Line ${sch.line}...`, true);
+                stopAutoStartChecker();
+                setTimeout(() => autoStartSession(sch), 1500);
+                return;
+            }
+
+            // Not yet shift time — show countdown
+            const msUntil = shiftStart - now;
+            const minsLeft = Math.round(msUntil / 60000);
+            const hrs  = Math.floor(minsLeft / 60);
+            const mins = minsLeft % 60;
+            const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins} min`;
+            showAutoStartBanner(
+                `📅 Line ${sch.line} session scheduled — auto-starts in ${timeStr} (${sch.shiftStart})`,
+                true
+            );
+        }
+
+        function showAutoStartBanner(msg, visible) {
+            const banner = document.getElementById('autoStartBanner');
+            const msgEl  = document.getElementById('autoStartMsg');
+            if (!banner || !msgEl) return;
+            msgEl.textContent = msg;
+            banner.style.display = visible ? 'block' : 'none';
+        }
+
+        // ── Auto-start: fill form and submit programmatically ──
+        async function autoStartSession(sch) {
+            // Show role screen → setup screen
+            document.getElementById('roleScreen').classList.add('hidden');
+            document.getElementById('setupScreen').classList.remove('hidden');
+
+            // Wait for form to render
+            await new Promise(r => setTimeout(r, 300));
+
+            // Fill each form field
+            const setField = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) { el.value = val; el.dispatchEvent(new Event('change')); }
+            };
+
+            // Try dynamic containers first, fall back to direct IDs
+            const setDynamic = (containerId, directId, val) => {
+                const container = document.getElementById(containerId);
+                if (container) {
+                    const sel = container.querySelector('select');
+                    const inp = container.querySelector('input');
+                    if (sel) { sel.value = val; sel.dispatchEvent(new Event('change')); }
+                    else if (inp) { inp.value = val; inp.dispatchEvent(new Event('input')); }
+                } else setField(directId, val);
+            };
+
+            setDynamic('lineContainer',       'line',       sch.line||'');
+            setDynamic('projectContainer',    'project',    sch.project||'');
+            setDynamic('typologyContainer',   'typology',   sch.typology||'');
+            setDynamic('shiftStartContainer', 'shiftStart', sch.shiftStart||'07:30');
+            setDynamic('shiftEndContainer',   'shiftEnd',   sch.shiftEnd||'16:30');
+            setDynamic('lunchStartContainer', 'lunchStart', sch.lunchStart||'');
+            setDynamic('lunchEndContainer',   'lunchEnd',   sch.lunchEnd||'');
+            setDynamic('teaStartContainer',   'teaStart',   sch.teaStart||'');
+            setDynamic('teaEndContainer',     'teaEnd',     sch.teaEnd||'');
+
+            setField('boq',          sch.boq||'');
+            setField('plan',         sch.plan||'');
+            setField('cycleTime',    sch.cycleTime||'');
+            setField('sqmPerUnit',   sch.sqmPerUnit||'');
+            setField('totalManpower',sch.manpower||'');
+            setField('present',      sch.present||sch.manpower||'');
+
+            // Small delay then submit the form
+            await new Promise(r => setTimeout(r, 400));
+
+            console.log('[AutoStart] Submitting scheduled session for Line', sch.line);
+            document.getElementById('setupForm').dispatchEvent(new Event('submit'));
+        }
+
+        // Start the auto-start checker when page loads (only on role screen)
+        function initAutoStart() {
+            startAutoStartChecker();
+        }
+
         function selectMonitorRole() {
             document.getElementById('pinModal').classList.add('active');
             document.getElementById('pinInput').value = '';
@@ -6300,6 +6848,9 @@
 
             // ── NEW: Start ESP32 sensor listener ──────
             startSensorListener();
+
+            // ── Stop auto-start checker — session is now active ──────
+            stopAutoStartChecker();
         }
 
         // ── ESP32 Photoelectric Sensor Listener ──────
@@ -6317,6 +6868,8 @@
             // Reset baseline: don't apply any pulses that happened before this listener attached
             sensorRef.once('value').then((snapshot) => {
                 sensorLastPulseCount = snapshot.val() || 0;
+                let sensorLastCountTime = 0;
+                const SENSOR_MIN_CYCLE_MS = 45000; // 45s min between counts — matches ESP32 gate
 
                 sensorRef.on('value', (snap) => {
                     const newCount = snap.val() || 0;
@@ -6328,8 +6881,15 @@
 
                     if (newCount > sensorLastPulseCount) {
                         const pulses = newCount - sensorLastPulseCount;
+                        const now = Date.now();
                         for (let i = 0; i < pulses; i++) {
-                            recordCycleCount(1);
+                            const timeSinceLast = now - sensorLastCountTime;
+                            if (sensorLastCountTime > 0 && timeSinceLast < SENSOR_MIN_CYCLE_MS) {
+                                console.warn(`PMS sensor gate: ignored pulse, only ${Math.round(timeSinceLast/1000)}s since last count`);
+                            } else {
+                                recordCycleCount(1);
+                                sensorLastCountTime = now;
+                            }
                         }
                     }
                     // If newCount < sensorLastPulseCount, the ESP32 likely restarted/reset its counter.
@@ -6355,6 +6915,46 @@
                     });
                 }, 10000);
             }
+
+            // ── -1 Correction listener ──────────────────────────────────
+            // ESP32 -1 button writes correctionCount to Firebase.
+            // Each increment triggers recordCycleCount(-1) in the PMS.
+            sensorCorrectionRef = db.ref(`lineSensors/line_${sanitizedLine}/correctionCount`);
+            sensorCorrectionRef.once('value').then((snap) => {
+                sensorLastCorrectionCount = snap.val() || 0;
+                sensorCorrectionRef.on('value', (corrSnap) => {
+                    const newCorr = corrSnap.val() || 0;
+                    if (sensorLastCorrectionCount === null) {
+                        sensorLastCorrectionCount = newCorr;
+                        return;
+                    }
+                    if (newCorr > sensorLastCorrectionCount) {
+                        const corrections = newCorr - sensorLastCorrectionCount;
+                        for (let i = 0; i < corrections; i++) {
+                            recordCycleCount(-1);
+                        }
+                    }
+                    sensorLastCorrectionCount = newCorr;
+                });
+            });
+
+            // ── Downtime signal listener ────────────────────────────────
+            // ESP32 downtime buttons write "start" or "end" to downtimeSignal.
+            // PMS triggers startDowntime() or endDowntime() accordingly.
+            sensorDtSignalRef = db.ref(`lineSensors/line_${sanitizedLine}/downtimeSignal`);
+            sensorDtSignalRef.on('value', (dtSnap) => {
+                const signal = dtSnap.val();
+                if (!signal || signal === sensorLastDtSignal) return;
+                sensorLastDtSignal = signal;
+
+                if (signal === 'start' && !downtimeActive) {
+                    console.log('[ESP32] Downtime START signal received');
+                    startDowntime();
+                } else if (signal === 'end' && downtimeActive) {
+                    console.log('[ESP32] Downtime END signal received');
+                    endDowntime(); // opens reason modal on screen
+                }
+            });
         }
 
         function stopSensorListener() {
@@ -6367,6 +6967,16 @@
                 clearInterval(sensorOnlineCheckInterval);
                 sensorOnlineCheckInterval = null;
             }
+            if (sensorCorrectionRef) {
+                sensorCorrectionRef.off();
+                sensorCorrectionRef = null;
+            }
+            sensorLastCorrectionCount = null;
+            if (sensorDtSignalRef) {
+                sensorDtSignalRef.off();
+                sensorDtSignalRef = null;
+            }
+            sensorLastDtSignal = null;
         }
 
         function updateTimers() {
@@ -7709,6 +8319,166 @@
                     }
                 });
             }
+
+            // Start auto-session checker after settings are loaded
+            // Small delay to allow Firebase settings/dropdowns to populate first
+            setTimeout(initAutoStart, 2000);
+        });
+
+        async function openViewSchedules() {
+            document.getElementById('viewSchedulesModal').style.display = 'flex';
+            await renderViewSchedules();
+        }
+
+        function closeViewSchedules() {
+            document.getElementById('viewSchedulesModal').style.display = 'none';
+        }
+
+        async function renderViewSchedules() {
+            const body  = document.getElementById('viewSchedulesBody');
+            const today = new Date().toISOString().slice(0,10);
+
+            const snap = await db.ref('schedules').once('value');
+            const data = snap.val() || {};
+
+            // Flatten all schedules
+            const entries = [];
+            Object.entries(data).forEach(([date, lines]) => {
+                Object.entries(lines).forEach(([sanitizedLine, sch]) => {
+                    entries.push({...sch, date, sanitizedLine});
+                });
+            });
+
+            // Split into upcoming and past
+            const upcoming = entries.filter(s => s.date >= today)
+                                    .sort((a,b) => a.date > b.date ? 1 : -1);
+            const past     = entries.filter(s => s.date < today)
+                                    .sort((a,b) => a.date > b.date ? -1 : 1)
+                                    .slice(0, 5); // last 5 only
+
+            if (!entries.length) {
+                body.innerHTML = `
+                    <div style="text-align:center;padding:40px 20px;color:#708090;">
+                        <div style="font-size:48px;margin-bottom:12px;">📭</div>
+                        <div style="font-size:15px;font-weight:600;">No schedules yet</div>
+                        <div style="font-size:13px;margin-top:6px;">
+                            Click "+ Add New Schedule" to plan a session
+                        </div>
+                    </div>`;
+                return;
+            }
+
+            const schCard = (s, isPast) => {
+                const isToday = s.date === today;
+                const borderColor = isToday ? '#d4af37' : isPast ? '#e5e7eb' : '#d1fae5';
+                const bgColor     = isToday ? '#fffbf0' : isPast ? '#fafafa' : '#f0fdf4';
+                const dayLabel    = isToday ? '🟡 TODAY' : isPast ? '✓ Past' : '📅 Upcoming';
+                const labelColor  = isToday ? '#b8941f' : isPast ? '#9ca3af' : '#15803d';
+
+                return `
+                    <div style="border:1.5px solid ${borderColor};background:${bgColor};
+                        border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+                        <div style="display:flex;justify-content:space-between;
+                            align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                            <div>
+                                <div style="font-size:15px;font-weight:700;color:#1a1a2e;">
+                                    Line ${s.line||'—'} &nbsp;·&nbsp; ${s.date}
+                                </div>
+                                <span style="font-size:11px;font-weight:700;color:${labelColor};
+                                    background:${borderColor}22;padding:2px 8px;border-radius:10px;
+                                    text-transform:uppercase;letter-spacing:0.5px;">
+                                    ${dayLabel}
+                                </span>
+                            </div>
+                            ${!isPast ? `
+                                <button onclick="deleteScheduleFromView('${s.date}','${s.sanitizedLine}')"
+                                    style="background:#fee2e2;color:#991b1b;border:none;
+                                    border-radius:6px;padding:5px 10px;font-size:11px;
+                                    font-weight:700;cursor:pointer;">🗑 Delete</button>
+                            ` : ''}
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);
+                            gap:8px;font-size:12px;">
+                            <div style="background:white;border-radius:6px;padding:8px 10px;
+                                border:1px solid #e5e7eb;">
+                                <div style="color:#708090;font-size:10px;font-weight:700;
+                                    text-transform:uppercase;letter-spacing:0.5px;">Project</div>
+                                <div style="font-weight:600;color:#1a1a2e;margin-top:2px;">
+                                    ${s.project||'—'}
+                                </div>
+                            </div>
+                            <div style="background:white;border-radius:6px;padding:8px 10px;
+                                border:1px solid #e5e7eb;">
+                                <div style="color:#708090;font-size:10px;font-weight:700;
+                                    text-transform:uppercase;letter-spacing:0.5px;">BOQ / Type</div>
+                                <div style="font-weight:600;color:#1a1a2e;margin-top:2px;">
+                                    ${s.boq||'—'} / ${s.typology||'—'}
+                                </div>
+                            </div>
+                            <div style="background:white;border-radius:6px;padding:8px 10px;
+                                border:1px solid #e5e7eb;">
+                                <div style="color:#708090;font-size:10px;font-weight:700;
+                                    text-transform:uppercase;letter-spacing:0.5px;">Plan</div>
+                                <div style="font-weight:700;color:#d4af37;font-size:16px;
+                                    margin-top:2px;">${s.plan||'—'}</div>
+                            </div>
+                            <div style="background:white;border-radius:6px;padding:8px 10px;
+                                border:1px solid #e5e7eb;">
+                                <div style="color:#708090;font-size:10px;font-weight:700;
+                                    text-transform:uppercase;letter-spacing:0.5px;">Shift</div>
+                                <div style="font-weight:600;color:#1a1a2e;margin-top:2px;">
+                                    ${s.shiftStart||'—'} → ${s.shiftEnd||'—'}
+                                </div>
+                            </div>
+                            <div style="background:white;border-radius:6px;padding:8px 10px;
+                                border:1px solid #e5e7eb;">
+                                <div style="color:#708090;font-size:10px;font-weight:700;
+                                    text-transform:uppercase;letter-spacing:0.5px;">Cycle Time</div>
+                                <div style="font-weight:600;color:#1a1a2e;margin-top:2px;">
+                                    ${s.cycleTime||'—'}s
+                                </div>
+                            </div>
+                            <div style="background:white;border-radius:6px;padding:8px 10px;
+                                border:1px solid #e5e7eb;">
+                                <div style="color:#708090;font-size:10px;font-weight:700;
+                                    text-transform:uppercase;letter-spacing:0.5px;">Manpower</div>
+                                <div style="font-weight:600;color:#1a1a2e;margin-top:2px;">
+                                    ${s.present||'—'} / ${s.manpower||'—'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            };
+
+            let html = '';
+
+            if (upcoming.length) {
+                html += `<div style="font-size:12px;font-weight:700;color:#708090;
+                    text-transform:uppercase;letter-spacing:0.7px;margin-bottom:10px;">
+                    📅 Upcoming (${upcoming.length})</div>`;
+                html += upcoming.map(s => schCard(s, false)).join('');
+            }
+
+            if (past.length) {
+                html += `<div style="font-size:12px;font-weight:700;color:#9ca3af;
+                    text-transform:uppercase;letter-spacing:0.7px;
+                    margin:16px 0 10px;">✓ Recent Past</div>`;
+                html += past.map(s => schCard(s, true)).join('');
+            }
+
+            body.innerHTML = html;
+        }
+
+        async function deleteScheduleFromView(date, sanitizedLine) {
+            if (!confirm(`Delete schedule for ${date}?`)) return;
+            await db.ref(`schedules/${date}/${sanitizedLine}`).remove();
+            await renderViewSchedules();
+        }
+
+        // Also close view schedules modal on outside click
+        document.getElementById('viewSchedulesModal').addEventListener('click', function(e) {
+            if (e.target === this) closeViewSchedules();
         });
     </script>
     
